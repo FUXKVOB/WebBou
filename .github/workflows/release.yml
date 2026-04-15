@@ -1,0 +1,108 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+    steps:
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+
+  build-release:
+    name: Build Release
+    needs: create-release
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-amd64
+            server_name: server
+            client_name: client
+          - os: windows-latest
+            target: windows-amd64
+            server_name: server.exe
+            client_name: client.exe
+          - os: macos-latest
+            target: darwin-amd64
+            server_name: server
+            client_name: client
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+      
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      
+      - name: Build server
+        working-directory: ./server
+        run: go build -v -ldflags="-s -w" -o ../bin/${{ matrix.server_name }} main_webbou.go
+      
+      - name: Build client (Unix)
+        if: matrix.os != 'windows-latest'
+        working-directory: ./client
+        run: |
+          cargo build --release
+          cp target/release/webbou-client ../bin/${{ matrix.client_name }}
+      
+      - name: Build client (Windows)
+        if: matrix.os == 'windows-latest'
+        working-directory: ./client
+        run: |
+          cargo build --release
+          cp target/release/webbou-client.exe ../bin/${{ matrix.client_name }}
+      
+      - name: Create archive (Unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          cd bin
+          tar -czf webbou-${{ matrix.target }}.tar.gz ${{ matrix.server_name }} ${{ matrix.client_name }}
+      
+      - name: Create archive (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          cd bin
+          7z a webbou-${{ matrix.target }}.zip ${{ matrix.server_name }} ${{ matrix.client_name }}
+      
+      - name: Upload Release Asset (Unix)
+        if: matrix.os != 'windows-latest'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./bin/webbou-${{ matrix.target }}.tar.gz
+          asset_name: webbou-${{ matrix.target }}.tar.gz
+          asset_content_type: application/gzip
+      
+      - name: Upload Release Asset (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./bin/webbou-${{ matrix.target }}.zip
+          asset_name: webbou-${{ matrix.target }}.zip
+          asset_content_type: application/zip

@@ -54,57 +54,70 @@
 - x25519-dalek v2.0.1
 - rand v0.10.1
 
-## Быстрый старт
+## Установка
 
-### Windows (PowerShell)
+### Требования
+- **Go 1.26+** - [Скачать](https://go.dev/dl/)
+- **Rust 1.77+** - [Скачать](https://rustup.rs/)
+- **Git** - [Скачать](https://git-scm.com/)
 
-```powershell
-# Сборка
-.\build.ps1
-
-# Тесты
-.\test.ps1
-
-# Версии
-.\versions.ps1
-
-# Запуск сервера
-.\bin\server.exe
-
-# Запуск клиента (новый терминал)
-.\bin\client.exe
-```
-
-### Linux/macOS (Bash)
+### Быстрая установка
 
 ```bash
-# Сборка
+# 1. Клонировать репозиторий
+git clone https://github.com/FUXKVOB/WebBou.git
+cd WebBou
+
+# 2. Собрать проект
 make all
 
-# Тесты
-make test
+# 3. Создать сертификаты (для QUIC/TLS)
+openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes -subj "/CN=localhost"
 
-# Версии
-make versions
-
-# Запуск сервера
+# 4. Запустить сервер
 make run-server
 
-# Запуск клиента
+# 5. Запустить клиент (новый терминал)
 make run-client
 ```
 
-## Ручная сборка
+### Или скачать готовые бинарники
 
-### Go сервер
-```bash
-cd server
-go mod download
-go build -o ../bin/server main_webbou.go
+Перейдите в [Releases](https://github.com/FUXKVOB/WebBou/releases) и скачайте для вашей ОС:
+- `webbou-linux-amd64.tar.gz` - Linux
+- `webbou-windows-amd64.zip` - Windows
+- `webbou-darwin-amd64.tar.gz` - macOS
+
+📖 **Подробная инструкция**: [docs/INSTALLATION.md](docs/INSTALLATION.md)
+
+## Использование в своём проекте
+
+### Rust
+
+```toml
+[dependencies]
+webbou = { git = "https://github.com/FUXKVOB/WebBou.git", package = "webbou-client" }
+tokio = { version = "1.52", features = ["full"] }
 ```
 
-### Rust клиент
+```rust
+use webbou::WebBouClient;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let client = WebBouClient::new("localhost:8443".to_string());
+    client.connect().await?;
+    
+    client.send(b"Hello!".to_vec(), true, false, false).await?;
+    let response = client.recv().await?;
+    
+    client.close().await?;
+    Ok(())
+}
+```
+
+### Go
+
 ```bash
-cd client
-cargo build --release
+go get github.com/FUXKVOB/WebBou/server/webbou
 ```
