@@ -1,35 +1,29 @@
-# WebBou Changelog
+# Changelog
 
-## v1.0.0 (2026-04-15)
+Все важные изменения в проекте WebBou документируются здесь.
 
-### Библиотеки (2026)
+## [Unreleased]
 
-#### Go
-- quic-go v0.59.0
-- klauspost/compress v1.18.5
-- lz4 v4.1.26
-- golang.org/x/crypto v0.50.0
-- golang.org/x/net v0.53.0
-- Go 1.26
+### Добавлено
+- GitHub Actions CI/CD для автоматической сборки
+- Автоматические релизы с бинарниками для Linux/Windows/macOS
+- Makefile для удобной сборки
+- Подробная документация по установке
 
-#### Rust
-- tokio v1.52.0
-- futures v0.3.32
-- serde v1.0.228
-- thiserror v2.0.18
-- tracing v0.1.44
-- tracing-subscriber v0.3.23
-- crc32fast v1.5.0
-- lz4_flex v0.13
-- chacha20poly1305 v0.10.1
-- x25519-dalek v2.0.1
-- rand v0.10.1
+### Изменено
+- Улучшена производительность с buffer pooling
+- Добавлен автоматический reconnect
+- Улучшена безопасность с rate limiting
 
-### Возможности
+## [v0.1.0] - 2026-04-15
 
-- Собственный бинарный протокол WebBou
-- QUIC + TCP transport
+### Добавлено
+- Первый релиз WebBou протокола
+- Go сервер с QUIC и TCP поддержкой
+- Rust клиент с async/await
 - ChaCha20-Poly1305 шифрование
 - LZ4/Zstd компрессия
-- Множественные streams
-- Reliable + Unreliable режимы
+- Базовая документация
+
+[Unreleased]: https://github.com/FUXKVOB/WebBou/compare/v0.1.0...HEAD
+[v0.1.0]: https://github.com/FUXKVOB/WebBou/releases/tag/v0.1.0
