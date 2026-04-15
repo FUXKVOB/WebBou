@@ -1,0 +1,35 @@
+# Binaries
+bin/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Go
+server/vendor/
+*.test
+*.out
+
+# Rust
+client/target/
+client/Cargo.lock
+**/*.rs.bk
+
+# Certificates
+*.pem
+*.key
+*.crt
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
