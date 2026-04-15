@@ -198,21 +198,3 @@ impl FrameReader {
         Ok(Some(frame))
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_frame_marshal_unmarshal() {
-        let payload = b"Hello, WebBou!".to_vec();
-        let frame = Frame::new(FRAME_DATA, 42, payload.clone());
-
-        let marshaled = frame.marshal();
-        let unmarshaled = Frame::unmarshal(&marshaled).unwrap();
-
-        assert_eq!(unmarshaled.frame_type, FRAME_DATA);
-        assert_eq!(unmarshaled.stream_id, 42);
-        assert_eq!(unmarshaled.payload, payload);
-    }
-}

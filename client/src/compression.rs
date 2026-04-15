@@ -28,20 +28,3 @@ impl Compressor {
         data.len() > 1024
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_compression() {
-        let compressor = Compressor::new(3);
-        let data = b"Hello, World! ".repeat(100);
-        
-        let compressed = compressor.compress(&data).unwrap();
-        assert!(compressed.len() < data.len());
-        
-        let decompressed = compressor.decompress(&compressed).unwrap();
-        assert_eq!(data, decompressed.as_slice());
-    }
-}

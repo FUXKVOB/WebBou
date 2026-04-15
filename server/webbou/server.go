@@ -12,11 +12,16 @@ import (
 )
 
 type Server struct {
-	quicListener net.Listener
-	tcpListener  net.Listener
-	sessions     sync.Map
-	config       *Config
-	crypto       *CryptoEngine
+	quicListener      net.Listener
+	tcpListener       net.Listener
+	sessions          sync.Map
+	config            *Config
+	crypto            *CryptoEngine
+	rateLimiter       *RateLimiter
+	connLimiter       *ConnectionRateLimiter
+	sessionManager    *SessionManager
+	bufferPool        *BufferPool
+	framePool         *FramePool
 }
 
 type Config struct {
@@ -55,8 +60,13 @@ func NewServer(config *Config) (*Server, error) {
 	}
 
 	return &Server{
-		config: config,
-		crypto: crypto,
+		config:         config,
+		crypto:         crypto,
+		rateLimiter:    NewRateLimiter(1000, 100), // 1000 tokens, 100/sec refill
+		connLimiter:    NewConnectionRateLimiter(10), // 10 connections per IP
+		sessionManager: NewSessionManager(30 * time.Minute),
+		bufferPool:     NewBufferPool(8192),
+		framePool:      NewFramePool(),
 	}, nil
 }
 
@@ -151,13 +161,24 @@ func (s *Server) handleQUICConnection(conn *quic.Conn) {
 }
 
 func (s *Server) handleTCPConnection(conn net.Conn) {
-	session := s.createSession(conn.RemoteAddr().String())
+	remoteIP := conn.RemoteAddr().String()
+
+	// Check connection limit
+	if !s.connLimiter.AllowConnection(remoteIP) {
+		log.Printf("Connection limit reached for %s", remoteIP)
+		conn.Close()
+		return
+	}
+	defer s.connLimiter.ReleaseConnection(remoteIP)
+
+	session := s.createSession(remoteIP)
 	defer s.closeSession(session)
 
-	log.Printf("TCP connection from %s", conn.RemoteAddr())
+	log.Printf("TCP connection from %s", remoteIP)
 
 	reader := NewFrameReader()
-	buf := make([]byte, 4096)
+	buf := s.bufferPool.Get()
+	defer s.bufferPool.Put(buf)
 
 	for {
 		n, err := conn.Read(buf)
@@ -175,6 +196,12 @@ func (s *Server) handleTCPConnection(conn net.Conn) {
 			}
 			if frame == nil {
 				break
+			}
+
+			// Rate limiting
+			if !s.rateLimiter.AllowIP(remoteIP) {
+				log.Printf("Rate limit exceeded for %s", remoteIP)
+				continue
 			}
 
 			s.handleFrame(session, frame, conn)

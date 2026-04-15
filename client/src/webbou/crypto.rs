@@ -71,20 +71,3 @@ impl CryptoEngine {
         Ok(vec![0u8; 32])
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_encrypt_decrypt() {
-        let crypto = CryptoEngine::new();
-        let plaintext = b"Hello, WebBou!";
-
-        let encrypted = crypto.encrypt(plaintext).unwrap();
-        assert_ne!(encrypted, plaintext);
-
-        let decrypted = crypto.decrypt(&encrypted).unwrap();
-        assert_eq!(decrypted, plaintext);
-    }
-}

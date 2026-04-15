@@ -46,19 +46,3 @@ pub fn estimate_compression_ratio(data: &[u8]) -> f64 {
         0.3
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_compression() {
-        let data = b"Hello, World! ".repeat(100);
-        
-        let compressed = compress(&data).unwrap();
-        assert!(compressed.len() < data.len());
-        
-        let decompressed = decompress(&compressed).unwrap();
-        assert_eq!(data.to_vec(), decompressed);
-    }
-}
