@@ -64,14 +64,17 @@ jobs:
         working-directory: ./client
         run: |
           cargo build --release
+          mkdir -p ../bin || true
           cp target/release/webbou-client ../bin/${{ matrix.client_name }}
       
       - name: Build client (Windows)
         if: matrix.os == 'windows-latest'
+        shell: pwsh
         working-directory: ./client
         run: |
           cargo build --release
-          cp target/release/webbou-client.exe ../bin/${{ matrix.client_name }}
+          if (-not (Test-Path ../bin)) { New-Item -ItemType Directory -Path ../bin }
+          Copy-Item target/release/webbou-client.exe ../bin/${{ matrix.client_name }}
       
       - name: Create archive (Unix)
         if: matrix.os != 'windows-latest'

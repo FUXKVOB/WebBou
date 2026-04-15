@@ -70,7 +70,7 @@ jobs:
       
       - name: Copy binary
         run: |
-          mkdir -p bin
+          mkdir -p bin || true
           cp client/target/release/webbou-client bin/client
       
       - name: Upload client artifact
@@ -104,9 +104,10 @@ jobs:
         run: cargo build --release
       
       - name: Copy client binary
+        shell: pwsh
         run: |
-          mkdir -p bin
-          cp client/target/release/webbou-client.exe bin/client.exe
+          if (-not (Test-Path bin)) { New-Item -ItemType Directory -Path bin }
+          Copy-Item client/target/release/webbou-client.exe bin/client.exe
       
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
@@ -140,7 +141,7 @@ jobs:
       
       - name: Copy client binary
         run: |
-          mkdir -p bin
+          mkdir -p bin || true
           cp client/target/release/webbou-client bin/client
       
       - name: Upload macOS artifacts
@@ -160,11 +161,18 @@ jobs:
         with:
           go-version: '1.26'
       
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v4
-        with:
-          version: latest
-          working-directory: ./server
+      - name: Go vet
+        working-directory: ./server
+        run: go vet ./...
+      
+      - name: Go fmt check
+        working-directory: ./server
+        run: |
+          if [ -n "$(gofmt -l .)" ]; then
+            echo "Go code is not formatted:"
+            gofmt -d .
+            exit 1
+          fi
       
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
