@@ -111,6 +111,7 @@ impl FrameFlags {
     pub const COMPRESSED: u8 = FLAG_COMPRESSED;
     pub const ENCRYPTED: u8 = FLAG_ENCRYPTED;
     pub const RELIABLE: u8 = FLAG_RELIABLE;
+    pub const ZERO_RTT: u8 = FLAG_ZERO_RTT;
 }
 
 #[derive(Debug, Clone)]

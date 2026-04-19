@@ -1,5 +1,5 @@
 use chacha20poly1305::{
-    aead::{Aead, KeyInit, OsRng},
+    aead::{Aead, KeyInit, OsRng, rand_core::RngCore},
     XChaCha20Poly1305, XNonce,
 };
 use x25519_dalek::{EphemeralSecret, PublicKey};
@@ -133,7 +133,7 @@ impl CryptoEngine {
             .map_err(|e| format!("Encryption failed: {}", e))?;
 
         let mut result = nonce_bytes.to_vec();
-        result.extend_from_slice(ciphertext);
+        result.extend_from_slice(&ciphertext);
 
         Ok(result)
     }
@@ -183,7 +183,9 @@ impl CryptoEngine {
             return Err("Invalid public key length".into());
         }
 
-        let peer_key = PublicKey::from(peer_public_key);
+        let mut key_array = [0u8; 32];
+        key_array.copy_from_slice(peer_public_key);
+        let peer_key = PublicKey::from(key_array);
         let shared = self.private_key.diffie_hellman(&peer_key);
 
         Ok(shared.as_bytes().to_vec())
