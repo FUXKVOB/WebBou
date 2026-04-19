@@ -6,7 +6,9 @@ pub const FRAME_PING: u8 = 0x02;
 pub const FRAME_PONG: u8 = 0x03;
 pub const FRAME_STREAM_OPEN: u8 = 0x04;
 pub const FRAME_STREAM_CLOSE: u8 = 0x05;
+#[allow(dead_code)]
 pub const FRAME_ACK: u8 = 0x06;
+#[allow(dead_code)]
 pub const FRAME_RESET: u8 = 0x07;
 pub const FRAME_SETTINGS: u8 = 0x08;
 // New frame types for 0-RTT, Multi-Path, Flow Control
@@ -24,26 +26,38 @@ pub const FRAME_ACK2: u8 = 0x33;
 pub const FLAG_COMPRESSED: u8 = 0x01;
 pub const FLAG_ENCRYPTED: u8 = 0x02;
 pub const FLAG_RELIABLE: u8 = 0x04;
+#[allow(dead_code)]
 pub const FLAG_PRIORITY_HIGH: u8 = 0x08;
+#[allow(dead_code)]
 pub const FLAG_FRAGMENTED: u8 = 0x10;
+#[allow(dead_code)]
 pub const FLAG_FINAL: u8 = 0x20;
 // New flags
+#[allow(dead_code)]
 pub const FLAG_ZERO_RTT: u8 = 0x40;
+#[allow(dead_code)]
 pub const FLAG_MULTI_PATH: u8 = 0x80;
-pub const FLAG_RESUMED: u8 = 0x100;
-pub const FLAG_ACK_EAGER: u8 = 0x200;
-pub const FLAG_PTO: u8 = 0x400;
+#[allow(dead_code)]
+pub const FLAG_RESUMED: u16 = 0x100;
+#[allow(dead_code)]
+pub const FLAG_ACK_EAGER: u16 = 0x200;
+#[allow(dead_code)]
+pub const FLAG_PTO: u16 = 0x400;
 
 // Protocol constants
 pub const MAGIC_BYTE: u8 = 0xB0;
 pub const VERSION: u8 = 0x03;
 pub const HEADER_SIZE: usize = 16;
 
+#[allow(dead_code)]
 pub const PROTO_VERSION_1_0: u8 = 0x01;
+#[allow(dead_code)]
 pub const PROTO_VERSION_1_1: u8 = 0x02;
+#[allow(dead_code)]
 pub const PROTO_VERSION_3_0: u8 = 0x03;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum FrameType {
     Data,
     Ping,
@@ -83,6 +97,7 @@ impl FrameType {
         }
     }
 
+    #[allow(dead_code)]
     pub fn from_u8(value: u8) -> Result<Self, Box<dyn std::error::Error>> {
         match value {
             FRAME_DATA => Ok(FrameType::Data),
@@ -111,6 +126,7 @@ impl FrameFlags {
     pub const COMPRESSED: u8 = FLAG_COMPRESSED;
     pub const ENCRYPTED: u8 = FLAG_ENCRYPTED;
     pub const RELIABLE: u8 = FLAG_RELIABLE;
+    #[allow(dead_code)]
     pub const ZERO_RTT: u8 = FLAG_ZERO_RTT;
 }
 

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
-use tokio::time::{interval, timeout};
+use tokio::time::interval;
 use tracing::{debug, warn, error};
 
 use super::protocol::{Frame, FrameType};
@@ -78,10 +78,12 @@ impl HeartbeatManager {
         *self.is_running.write().await = false;
     }
 
+    #[allow(dead_code)]
     pub async fn is_running(&self) -> bool {
         *self.is_running.read().await
     }
 
+    #[allow(dead_code)]
     pub async fn get_last_activity(&self) -> Duration {
         self.last_activity.read().await.elapsed()
     }

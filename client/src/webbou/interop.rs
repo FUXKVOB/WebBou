@@ -139,7 +139,7 @@ mod tests {
     }
 }
 
-#[cfg(feature = "integration")]
+#[cfg(test)]
 mod integration_tests {
     use super::*;
     use tokio::time::Duration;

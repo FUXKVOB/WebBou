@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 
@@ -99,6 +99,7 @@ impl Config {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum ClientState {
     Closed = 0,
     Connecting = 1,
@@ -108,12 +109,14 @@ pub enum ClientState {
     Closing = 5,
 }
 
+#[allow(dead_code)]
 pub struct ConnectionStateMachine {
     state: Arc<AtomicU64>,
     on_change: RwLock<HashMap<u64, Box<dyn Fn(u64) + Send + Sync>>>,
 }
 
 impl ConnectionStateMachine {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self {
             state: Arc::new(AtomicU64::new(0)),
@@ -121,10 +124,12 @@ impl ConnectionStateMachine {
         }
     }
 
+    #[allow(dead_code)]
     pub fn current_state(&self) -> u64 {
         self.state.load(Ordering::SeqCst)
     }
 
+    #[allow(dead_code)]
     pub fn set_state(&self, new_state: u64) -> Result<(), &'static str> {
         let old = self.state.load(Ordering::SeqCst);
 
@@ -150,11 +155,13 @@ impl ConnectionStateMachine {
         )
     }
 
+    #[allow(dead_code)]
     pub fn is_ready(&self) -> bool {
         self.state.load(Ordering::SeqCst) == 4
     }
 }
 
+#[allow(dead_code)]
 pub struct CircuitBreaker {
     failures: AtomicU64,
     successes: Arc<AtomicU64>,
@@ -165,6 +172,7 @@ pub struct CircuitBreaker {
 }
 
 impl CircuitBreaker {
+    #[allow(dead_code)]
     pub fn new(threshold: u64, timeout: Duration) -> Self {
         Self {
             failures: AtomicU64::new(0),
@@ -176,6 +184,7 @@ impl CircuitBreaker {
         }
     }
 
+    #[allow(dead_code)]
     pub fn allow(&self) -> bool {
         let state = self.state.load(Ordering::SeqCst);
 
@@ -197,6 +206,7 @@ impl CircuitBreaker {
         }
     }
 
+    #[allow(dead_code)]
     pub fn success(&self) {
         self.successes.fetch_add(1, Ordering::SeqCst);
         self.failures.store(0, Ordering::SeqCst);
@@ -206,6 +216,7 @@ impl CircuitBreaker {
         }
     }
 
+    #[allow(dead_code)]
     pub fn failure(&self) {
         self.failures.fetch_add(1, Ordering::SeqCst);
 
@@ -218,11 +229,13 @@ impl CircuitBreaker {
         }
     }
 
+    #[allow(dead_code)]
     pub fn is_open(&self) -> bool {
         self.state.load(Ordering::SeqCst) == 1
     }
 }
 
+#[allow(dead_code)]
 pub struct RetryPolicy {
     max_attempts: u32,
     initial_delay: Duration,
@@ -231,6 +244,7 @@ pub struct RetryPolicy {
 }
 
 impl RetryPolicy {
+    #[allow(dead_code)]
     pub fn new(max_attempts: u32) -> Self {
         Self {
             max_attempts,
@@ -240,10 +254,12 @@ impl RetryPolicy {
         }
     }
 
+    #[allow(dead_code)]
     pub fn should_retry(&self, attempt: u32) -> bool {
         attempt < self.max_attempts
     }
 
+    #[allow(dead_code)]
     pub fn delay(&self, attempt: u32) -> Duration {
         let delay = self.initial_delay.as_millis() as f64 * self.multiplier.powi(attempt as i32);
         let delay = Duration::from_millis(delay.min(self.max_delay.as_millis() as f64) as u64);
@@ -251,17 +267,20 @@ impl RetryPolicy {
     }
 }
 
+#[allow(dead_code)]
 pub struct HealthChecker {
     checks: RwLock<HashMap<String, Box<dyn Fn() -> bool + Send + Sync>>>,
 }
 
 impl HealthChecker {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self {
             checks: RwLock::new(HashMap::new()),
         }
     }
 
+    #[allow(dead_code)]
     pub fn register<F>(&self, name: String, check: F)
     where
         F: Fn() -> bool + Send + Sync + 'static,
@@ -271,6 +290,7 @@ impl HealthChecker {
         }
     }
 
+    #[allow(dead_code)]
     pub fn check(&self) -> bool {
         if let Ok(checks) = self.checks.read() {
             for (_, check) in checks.iter() {
@@ -283,6 +303,7 @@ impl HealthChecker {
     }
 }
 
+#[allow(dead_code)]
 pub struct MetricsCollector {
     connections: AtomicU64,
     frames_sent: AtomicU64,
@@ -295,6 +316,7 @@ pub struct MetricsCollector {
 }
 
 impl MetricsCollector {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self {
             connections: AtomicU64::new(0),
@@ -308,39 +330,48 @@ impl MetricsCollector {
         }
     }
 
+    #[allow(dead_code)]
     pub fn inc_connections(&self) {
         self.connections.fetch_add(1, Ordering::SeqCst);
         self.active_connections.fetch_add(1, Ordering::SeqCst);
     }
 
+    #[allow(dead_code)]
     pub fn dec_connections(&self) {
         self.active_connections.fetch_sub(1, Ordering::SeqCst);
     }
 
+    #[allow(dead_code)]
     pub fn inc_frames_sent(&self) {
         self.frames_sent.fetch_add(1, Ordering::SeqCst);
     }
 
+    #[allow(dead_code)]
     pub fn inc_frames_recv(&self) {
         self.frames_recv.fetch_add(1, Ordering::SeqCst);
     }
 
+    #[allow(dead_code)]
     pub fn add_bytes_sent(&self, n: u64) {
         self.bytes_sent.fetch_add(n, Ordering::SeqCst);
     }
 
+    #[allow(dead_code)]
     pub fn add_bytes_recv(&self, n: u64) {
         self.bytes_recv.fetch_add(n, Ordering::SeqCst);
     }
 
+    #[allow(dead_code)]
     pub fn inc_errors(&self) {
         self.errors.fetch_add(1, Ordering::SeqCst);
     }
 
+    #[allow(dead_code)]
     pub fn add_latency(&self, ms: u64) {
         self.latency_sum.fetch_add(ms, Ordering::SeqCst);
     }
 
+    #[allow(dead_code)]
     pub fn get(&self) -> MetricsSnapshot {
         MetricsSnapshot {
             connections: self.connections.load(Ordering::SeqCst),
@@ -355,6 +386,7 @@ impl MetricsCollector {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct MetricsSnapshot {
     pub connections: u64,
     pub active_connections: u64,

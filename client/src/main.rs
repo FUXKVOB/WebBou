@@ -1,8 +1,6 @@
 mod webbou;
 
 use webbou::WebBouClient;
-use std::time::Duration;
-use tokio::time::sleep;
 use tracing::{info, Level};
 use tracing_subscriber;
 

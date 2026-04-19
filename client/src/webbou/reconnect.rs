@@ -1,10 +1,13 @@
 use std::time::Duration;
 use tokio::time::sleep;
-use tracing::{info, warn};
+use tracing::warn;
 
 pub struct ReconnectStrategy {
+    #[allow(dead_code)]
     max_retries: u32,
+    #[allow(dead_code)]
     base_delay: Duration,
+    #[allow(dead_code)]
     max_delay: Duration,
     current_retry: u32,
 }
@@ -23,10 +26,12 @@ impl ReconnectStrategy {
         self.current_retry = 0;
     }
 
+    #[allow(dead_code)]
     pub fn should_retry(&self) -> bool {
         self.current_retry < self.max_retries
     }
 
+    #[allow(dead_code)]
     pub async fn wait(&mut self) {
         if self.current_retry >= self.max_retries {
             return;
@@ -47,6 +52,7 @@ impl ReconnectStrategy {
         self.current_retry += 1;
     }
 
+    #[allow(dead_code)]
     pub fn get_current_retry(&self) -> u32 {
         self.current_retry
     }
@@ -55,7 +61,9 @@ impl ReconnectStrategy {
 pub struct ConnectionHealth {
     last_ping: std::time::Instant,
     last_pong: std::time::Instant,
+    #[allow(dead_code)]
     ping_interval: Duration,
+    #[allow(dead_code)]
     timeout: Duration,
 }
 
@@ -70,6 +78,7 @@ impl ConnectionHealth {
         }
     }
 
+    #[allow(dead_code)]
     pub fn should_ping(&self) -> bool {
         self.last_ping.elapsed() >= self.ping_interval
     }
@@ -82,10 +91,12 @@ impl ConnectionHealth {
         self.last_pong = std::time::Instant::now();
     }
 
+    #[allow(dead_code)]
     pub fn is_healthy(&self) -> bool {
         self.last_pong.elapsed() < self.timeout
     }
 
+    #[allow(dead_code)]
     pub fn get_latency(&self) -> Duration {
         if self.last_pong > self.last_ping {
             Duration::from_millis(0)

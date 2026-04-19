@@ -1,19 +1,21 @@
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Condvar, Mutex};
-use std::time::Duration;
+use std::sync::{Condvar, Mutex};
 
+#[allow(dead_code)]
 pub struct SpinLock {
     locked: AtomicBool,
 }
 
 impl SpinLock {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self {
             locked: AtomicBool::new(false),
         }
     }
 
+    #[allow(dead_code)]
     pub fn lock(&self) {
         while self
             .locked
@@ -24,6 +26,7 @@ impl SpinLock {
         }
     }
 
+    #[allow(dead_code)]
     pub fn unlock(&self) {
         self.locked.store(false, Ordering::Release);
     }
@@ -35,6 +38,7 @@ impl Default for SpinLock {
     }
 }
 
+#[allow(dead_code)]
 pub struct MemoryPool<T> {
     pool: Mutex<VecDeque<T>>,
     factory: Box<dyn Fn() -> T + Send + Sync>,
@@ -44,6 +48,7 @@ pub struct MemoryPool<T> {
 }
 
 impl<T: Default> MemoryPool<T> {
+    #[allow(dead_code)]
     pub fn with_capacity(max_size: usize) -> Self {
         Self {
             pool: Mutex::new(VecDeque::with_capacity(max_size)),
@@ -53,11 +58,13 @@ impl<T: Default> MemoryPool<T> {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get(&self) -> T {
         let mut pool = self.pool.lock().unwrap();
         pool.pop_front().unwrap_or_else(|| (self.factory)())
     }
 
+    #[allow(dead_code)]
     pub fn put(&self, item: T) {
         let mut pool = self.pool.lock().unwrap();
         if pool.len() < self.max_size {
@@ -66,6 +73,7 @@ impl<T: Default> MemoryPool<T> {
     }
 }
 
+#[allow(dead_code)]
 pub struct BackPressureController {
     enabled: AtomicBool,
     high_water_mark: u64,
@@ -75,6 +83,7 @@ pub struct BackPressureController {
 }
 
 impl BackPressureController {
+    #[allow(dead_code)]
     pub fn new(high_water_mark: u64, low_water_mark: u64) -> Self {
         Self {
             enabled: AtomicBool::new(true),
@@ -85,6 +94,7 @@ impl BackPressureController {
         }
     }
 
+    #[allow(dead_code)]
     pub fn try_acquire(&self, amount: u64) -> bool {
         if !self.enabled.load(Ordering::SeqCst) {
             return true;
@@ -100,6 +110,7 @@ impl BackPressureController {
         true
     }
 
+    #[allow(dead_code)]
     pub fn release(&self, amount: u64) {
         self.current_usage.fetch_sub(amount, Ordering::SeqCst);
 
@@ -109,23 +120,28 @@ impl BackPressureController {
         }
     }
 
+    #[allow(dead_code)]
     pub fn is_paused(&self) -> bool {
         self.paused.load(Ordering::SeqCst)
     }
 
+    #[allow(dead_code)]
     pub fn usage(&self) -> u64 {
         self.current_usage.load(Ordering::SeqCst)
     }
 
+    #[allow(dead_code)]
     pub fn enable(&self) {
         self.enabled.store(true, Ordering::SeqCst);
     }
 
+    #[allow(dead_code)]
     pub fn disable(&self) {
         self.enabled.store(false, Ordering::SeqCst);
     }
 }
 
+#[allow(dead_code)]
 pub struct BatchedWriter {
     queue: Mutex<VecDeque<Vec<u8>>>,
     condvar: Condvar,
@@ -134,6 +150,7 @@ pub struct BatchedWriter {
 }
 
 impl BatchedWriter {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self {
             queue: Mutex::new(VecDeque::new()),
@@ -143,6 +160,7 @@ impl BatchedWriter {
         }
     }
 
+    #[allow(dead_code)]
     pub fn enqueue(&self, data: Vec<u8>) {
         let mut queue = self.queue.lock().unwrap();
         queue.push_back(data);
@@ -150,6 +168,7 @@ impl BatchedWriter {
         self.condvar.notify_one();
     }
 
+    #[allow(dead_code)]
     pub fn flush(&self) {
         let mut queue = self.queue.lock().unwrap();
         while let Some(data) = queue.pop_front() {
@@ -159,11 +178,13 @@ impl BatchedWriter {
         }
     }
 
+    #[allow(dead_code)]
     pub fn shutdown(&self) {
         self.shutdown.store(true, Ordering::SeqCst);
         self.condvar.notify_all();
     }
 
+    #[allow(dead_code)]
     pub fn pending_count(&self) -> u64 {
         self.pending.load(Ordering::SeqCst)
     }

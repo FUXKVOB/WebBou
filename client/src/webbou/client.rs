@@ -9,7 +9,7 @@ use tokio::sync::RwLock;
 use tokio::net::TcpStream;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::time::timeout;
-use tracing::{info, warn, error};
+use tracing::{info, warn};
 
 pub struct WebBouClient {
     server_addr: String,
@@ -19,8 +19,11 @@ pub struct WebBouClient {
     reconnect_strategy: Arc<RwLock<ReconnectStrategy>>,
     health: Arc<RwLock<ConnectionHealth>>,
     heartbeat: Arc<HeartbeatManager>,
+    #[allow(dead_code)]
     auto_reconnect: bool,
+    #[allow(dead_code)]
     zero_rtt: Arc<RwLock<ZeroRTTState>>,
+    #[allow(dead_code)]
     session_id: Option<String>,
 }
 
@@ -37,6 +40,7 @@ pub struct ClientStats {
     pub frames_sent: u64,
     pub frames_recv: u64,
     pub compression_ratio: f64,
+    #[allow(dead_code)]
     pub reconnect_count: u32,
     pub avg_latency_ms: u64,
 }
@@ -63,6 +67,7 @@ impl WebBouClient {
         }
     }
 
+    #[allow(dead_code)]
     pub fn with_auto_reconnect(mut self, enabled: bool) -> Self {
         self.auto_reconnect = enabled;
         self
@@ -123,7 +128,7 @@ impl WebBouClient {
 
         self.heartbeat.start(move |frame| {
             let connection = Arc::clone(&connection);
-            let crypto = Arc::clone(&crypto);
+            let _crypto = Arc::clone(&crypto);
             let stats = Arc::clone(&stats);
 
             async move {
@@ -143,6 +148,7 @@ impl WebBouClient {
         }).await;
     }
 
+    #[allow(dead_code)]
     pub async fn send_with_retry(
         &self,
         data: Vec<u8>,
@@ -229,6 +235,7 @@ impl WebBouClient {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub async fn recv_with_timeout(
         &self,
         timeout_duration: Duration,
@@ -327,6 +334,7 @@ impl WebBouClient {
         }
     }
 
+    #[allow(dead_code)]
     pub async fn reconnect(&self) -> Result<(), Box<dyn std::error::Error>> {
         info!("Attempting to reconnect...");
 
@@ -353,10 +361,12 @@ impl WebBouClient {
         Err("Max reconnect attempts reached".into())
     }
 
+    #[allow(dead_code)]
     pub async fn is_connected(&self) -> bool {
         self.connection.read().await.is_some()
     }
 
+    #[allow(dead_code)]
     pub async fn is_healthy(&self) -> bool {
         self.health.read().await.is_healthy()
     }
@@ -378,15 +388,18 @@ impl WebBouClient {
     }
 
     // 0-RTT methods
+    #[allow(dead_code)]
     pub async fn enable_zero_rtt(&self, psk_identity: String, secret: &[u8]) {
         let mut zrtt = self.zero_rtt.write().await;
         zrtt.generate_psk(psk_identity, secret);
     }
 
+    #[allow(dead_code)]
     pub async fn is_zero_rtt_available(&self) -> bool {
         self.zero_rtt.read().await.is_available()
     }
 
+    #[allow(dead_code)]
     pub async fn send_with_zero_rtt(&self, data: Vec<u8>) -> Result<(), Box<dyn std::error::Error>> {
         let mut zrtt = self.zero_rtt.write().await;
 
@@ -402,6 +415,7 @@ impl WebBouClient {
         self.send_frame(frame).await
     }
 
+    #[allow(dead_code)]
     pub async fn complete_zero_rtt_handshake(&mut self, session_id: String) -> Result<(), Box<dyn std::error::Error>> {
         self.session_id = Some(session_id);
 
@@ -410,15 +424,18 @@ impl WebBouClient {
     }
 
     #[allow(unused_variables)]
+    #[allow(dead_code)]
     pub async fn enable_tls13(&self) {
         tracing::info!("TLS 1.3 with post-quantum support enabled");
     }
 
     #[allow(unused_variables)]
+    #[allow(dead_code)]
     pub async fn enable_cert_pinning(&self, _cert_hash: &[u8]) {
         tracing::info!("Certificate pinning enabled");
     }
 
+    #[allow(dead_code)]
     pub async fn get_cipher_suite(&self) -> String {
         self.crypto.get_cipher_suite().to_string()
     }

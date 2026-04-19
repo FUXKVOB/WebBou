@@ -20,10 +20,12 @@ pub fn decompress(data: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         .map_err(|e| format!("Decompression failed: {}", e).into())
 }
 
+#[allow(dead_code)]
 pub fn should_compress(data: &[u8]) -> bool {
     data.len() > 512
 }
 
+#[allow(dead_code)]
 pub fn estimate_compression_ratio(data: &[u8]) -> f64 {
     if data.len() < 100 {
         return 1.0;

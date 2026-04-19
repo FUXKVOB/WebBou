@@ -8,10 +8,17 @@ pub mod batch;
 pub mod interop;
 pub mod config;
 
+#[allow(unused_imports)]
 pub use protocol::{Frame, FrameType, FrameFlags};
-pub use client::{WebBouClient, ClientStats};
+#[allow(unused_imports)]
+pub use client::WebBouClient;
+#[allow(unused_imports)]
 pub use crypto::CryptoEngine;
+#[allow(unused_imports)]
 pub use heartbeat::HeartbeatManager;
-pub use reconnect::{ReconnectStrategy, ConnectionHealth};
-pub use batch::{SpinLock, MemoryPool, BackPressureController, BatchedWriter};
-pub use config::{Config, ConnectionStateMachine, CircuitBreaker, RetryPolicy, HealthChecker, MetricsCollector};
+#[allow(unused_imports)]
+pub use reconnect::ReconnectStrategy;
+#[allow(unused_imports)]
+pub use batch::BackPressureController;
+#[allow(unused_imports)]
+pub use config::Config;
