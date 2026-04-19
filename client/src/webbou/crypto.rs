@@ -110,7 +110,7 @@ impl CryptoEngine {
         Ok(plaintext)
     }
 
-    pub fn encrypt_session(&mut self, session_id: &str, plaintext: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    pub fn encrypt_session(&mut self, _session_id: &str, plaintext: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         if self.session_key.is_none() {
             return self.encrypt(plaintext);
         }
@@ -138,7 +138,7 @@ impl CryptoEngine {
         Ok(result)
     }
 
-    pub fn decrypt_session(&mut self, session_id: &str, data: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    pub fn decrypt_session(&mut self, _session_id: &str, data: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         if self.session_key.is_none() {
             return self.decrypt(data);
         }
@@ -162,7 +162,7 @@ impl CryptoEngine {
     }
 
     fn rotate_session_key(&mut self) {
-        if let Some(old_key) = &self.session_key {
+        if self.session_key.is_some() {
             let mut new_key = vec![0u8; 32];
             OsRng.fill_bytes(&mut new_key);
             self.session_key = Some(new_key);
@@ -186,7 +186,9 @@ impl CryptoEngine {
         let mut key_array = [0u8; 32];
         key_array.copy_from_slice(peer_public_key);
         let peer_key = PublicKey::from(key_array);
-        let shared = self.private_key.diffie_hellman(&peer_key);
+
+        let private_key = EphemeralSecret::random_from_rng(OsRng);
+        let shared = private_key.diffie_hellman(&peer_key);
 
         Ok(shared.as_bytes().to_vec())
     }

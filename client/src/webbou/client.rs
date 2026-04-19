@@ -404,8 +404,6 @@ impl WebBouClient {
 
     pub async fn complete_zero_rtt_handshake(&mut self, session_id: String) -> Result<(), Box<dyn std::error::Error>> {
         self.session_id = Some(session_id);
-        // Session key setup - simplified
-        let _ = self.crypto.create_session_key();
 
         let frame = Frame::new(FrameType::HelloDone, 0, vec![]);
         self.send_frame(frame).await
