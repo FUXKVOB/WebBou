@@ -6,16 +6,42 @@ pub const FRAME_PING: u8 = 0x02;
 pub const FRAME_PONG: u8 = 0x03;
 pub const FRAME_STREAM_OPEN: u8 = 0x04;
 pub const FRAME_STREAM_CLOSE: u8 = 0x05;
+pub const FRAME_ACK: u8 = 0x06;
+pub const FRAME_RESET: u8 = 0x07;
+pub const FRAME_SETTINGS: u8 = 0x08;
+// New frame types for 0-RTT, Multi-Path, Flow Control
+pub const FRAME_HELLO: u8 = 0x10;
+pub const FRAME_HELLO_ACK: u8 = 0x11;
+pub const FRAME_HELLO_DONE: u8 = 0x12;
+pub const FRAME_MULTI_PATH: u8 = 0x20;
+pub const FRAME_PATH_CLOSE: u8 = 0x21;
+pub const FRAME_FLOW_CONTROL: u8 = 0x30;
+pub const FRAME_MAX_DATA: u8 = 0x31;
+pub const FRAME_BLOCKED: u8 = 0x32;
+pub const FRAME_ACK2: u8 = 0x33;
 
 // Frame flags
 pub const FLAG_COMPRESSED: u8 = 0x01;
 pub const FLAG_ENCRYPTED: u8 = 0x02;
 pub const FLAG_RELIABLE: u8 = 0x04;
+pub const FLAG_PRIORITY_HIGH: u8 = 0x08;
+pub const FLAG_FRAGMENTED: u8 = 0x10;
+pub const FLAG_FINAL: u8 = 0x20;
+// New flags
+pub const FLAG_ZERO_RTT: u8 = 0x40;
+pub const FLAG_MULTI_PATH: u8 = 0x80;
+pub const FLAG_RESUMED: u8 = 0x100;
+pub const FLAG_ACK_EAGER: u8 = 0x200;
+pub const FLAG_PTO: u8 = 0x400;
 
 // Protocol constants
 pub const MAGIC_BYTE: u8 = 0xB0;
-pub const VERSION: u8 = 0x01;
+pub const VERSION: u8 = 0x03;
 pub const HEADER_SIZE: usize = 16;
+
+pub const PROTO_VERSION_1_0: u8 = 0x01;
+pub const PROTO_VERSION_1_1: u8 = 0x02;
+pub const PROTO_VERSION_3_0: u8 = 0x03;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FrameType {
@@ -25,6 +51,15 @@ pub enum FrameType {
     StreamOpen,
     StreamClose,
     Settings,
+    Hello,
+    HelloAck,
+    HelloDone,
+    MultiPath,
+    PathClose,
+    FlowControl,
+    MaxData,
+    Blocked,
+    Ack2,
 }
 
 impl FrameType {
@@ -35,7 +70,16 @@ impl FrameType {
             FrameType::Pong => FRAME_PONG,
             FrameType::StreamOpen => FRAME_STREAM_OPEN,
             FrameType::StreamClose => FRAME_STREAM_CLOSE,
-            FrameType::Settings => 0x06,
+            FrameType::Settings => FRAME_SETTINGS,
+            FrameType::Hello => FRAME_HELLO,
+            FrameType::HelloAck => FRAME_HELLO_ACK,
+            FrameType::HelloDone => FRAME_HELLO_DONE,
+            FrameType::MultiPath => FRAME_MULTI_PATH,
+            FrameType::PathClose => FRAME_PATH_CLOSE,
+            FrameType::FlowControl => FRAME_FLOW_CONTROL,
+            FrameType::MaxData => FRAME_MAX_DATA,
+            FrameType::Blocked => FRAME_BLOCKED,
+            FrameType::Ack2 => FRAME_ACK2,
         }
     }
 
@@ -46,7 +90,16 @@ impl FrameType {
             FRAME_PONG => Ok(FrameType::Pong),
             FRAME_STREAM_OPEN => Ok(FrameType::StreamOpen),
             FRAME_STREAM_CLOSE => Ok(FrameType::StreamClose),
-            0x06 => Ok(FrameType::Settings),
+            FRAME_SETTINGS => Ok(FrameType::Settings),
+            FRAME_HELLO => Ok(FrameType::Hello),
+            FRAME_HELLO_ACK => Ok(FrameType::HelloAck),
+            FRAME_HELLO_DONE => Ok(FrameType::HelloDone),
+            FRAME_MULTI_PATH => Ok(FrameType::MultiPath),
+            FRAME_PATH_CLOSE => Ok(FrameType::PathClose),
+            FRAME_FLOW_CONTROL => Ok(FrameType::FlowControl),
+            FRAME_MAX_DATA => Ok(FrameType::MaxData),
+            FRAME_BLOCKED => Ok(FrameType::Blocked),
+            FRAME_ACK2 => Ok(FrameType::Ack2),
             _ => Err("Unknown frame type".into()),
         }
     }

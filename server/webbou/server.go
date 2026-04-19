@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/quic-go/quic-go"
@@ -15,22 +16,20 @@ type Server struct {
 	quicListener      net.Listener
 	tcpListener       net.Listener
 	sessions          sync.Map
-	config            *Config
+	config            *ServerConfig
 	crypto            *CryptoEngine
 	rateLimiter       *RateLimiter
 	connLimiter       *ConnectionRateLimiter
 	sessionManager    *SessionManager
 	bufferPool        *BufferPool
 	framePool         *FramePool
-}
 
-type Config struct {
-	QUICAddr         string
-	TCPAddr          string
-	MaxStreams       int
-	MaxFrameSize     int
-	CompressionLevel int
-	TLSConfig        *tls.Config
+	batchSender        *BatchSender
+	backPressure     *BackPressureMonitor
+	ddosProtector     *DDOSProtector
+	ipReputation      *IPReputationManager
+
+	statsMutex        atomic.Value
 }
 
 type Session struct {
@@ -53,7 +52,7 @@ type SessionStats struct {
 	CreatedAt     time.Time
 }
 
-func NewServer(config *Config) (*Server, error) {
+func NewServer(config *ServerConfig) (*Server, error) {
 	crypto, err := NewCryptoEngine()
 	if err != nil {
 		return nil, err
@@ -62,11 +61,15 @@ func NewServer(config *Config) (*Server, error) {
 	return &Server{
 		config:         config,
 		crypto:         crypto,
-		rateLimiter:    NewRateLimiter(1000, 100), // 1000 tokens, 100/sec refill
-		connLimiter:    NewConnectionRateLimiter(10), // 10 connections per IP
+		rateLimiter:    NewRateLimiter(1000, 100),
+		connLimiter:    NewConnectionRateLimiter(10),
 		sessionManager: NewSessionManager(30 * time.Minute),
 		bufferPool:     NewBufferPool(8192),
 		framePool:      NewFramePool(),
+		batchSender:    NewBatchSender(100),
+		backPressure:  NewBackPressureMonitor(0.8, 0.95),
+		ddosProtector:  NewDDOSProtector(100, 1000, 60),
+		ipReputation:   NewIPReputationManager(),
 	}, nil
 }
 
@@ -92,7 +95,7 @@ func (s *Server) startQUIC() {
 		// v0.58.0: MaxIncomingStreams moved to Transport
 	}
 
-	listener, err := quic.ListenAddr(s.config.QUICAddr, s.config.TLSConfig, quicConfig)
+	listener, err := quic.ListenAddr(s.config.QUICAddr, s.config.TLSConfig.(*tls.Config), quicConfig)
 	if err != nil {
 		log.Printf("QUIC listener failed: %v", err)
 		return
@@ -112,7 +115,7 @@ func (s *Server) startQUIC() {
 }
 
 func (s *Server) startTCP() {
-	listener, err := tls.Listen("tcp", s.config.TCPAddr, s.config.TLSConfig)
+	listener, err := tls.Listen("tcp", s.config.TCPAddr, s.config.TLSConfig.(*tls.Config))
 	if err != nil {
 		log.Printf("TCP listener failed: %v", err)
 		return

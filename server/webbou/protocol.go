@@ -14,24 +14,40 @@ const (
 
 // Frame types
 const (
-	FrameData        = 0x01
+	FrameData          = 0x01
 	FramePing        = 0x02
-	FramePong        = 0x03
+	FramePong       = 0x03
 	FrameStreamOpen  = 0x04
 	FrameStreamClose = 0x05
-	FrameAck         = 0x06
-	FrameReset       = 0x07
-	FrameSettings    = 0x08
+	FrameAck        = 0x06
+	FrameReset      = 0x07
+	FrameSettings   = 0x08
+	// New frame types for advanced features
+	FrameHello         = 0x10 // 0-RTT initial handshake
+	FrameHelloAck      = 0x11 // 0-RTT ack
+	FrameHelloDone     = 0x12 // 0-RTT handshake complete
+	FrameMultiPath    = 0x20 // Multi-path connection
+	FramePathClose   = 0x21 // Close a path
+	FrameFlowControl = 0x30 // Flow control update
+	FrameMaxData     = 0x31 // Max data window
+	FrameBlocked     = 0x32 // Stream blocked
+	FrameAck2        = 0x33 // Enhanced ACK with timestamp
 )
 
 // Flags
 const (
-	FlagCompressed   = 0x01
-	FlagEncrypted    = 0x02
-	FlagReliable     = 0x04
+	FlagCompressed    = 0x01
+	FlagEncrypted     = 0x02
+	FlagReliable      = 0x04
 	FlagPriorityHigh = 0x08
 	FlagFragmented   = 0x10
 	FlagFinal        = 0x20
+	// New flags for advanced features
+	FlagZeroRTT    = 0x40 // 0-RTT early data
+	FlagMultiPath = 0x80 // Multi-path frame
+	FlagResumed   = 0x100 // Session resumed
+	FlagAckEager  = 0x200 // Immediate ACK requested
+	FlagPTO       = 0x400 ; // Probe Timeout (loss detection)
 )
 
 type Frame struct {
