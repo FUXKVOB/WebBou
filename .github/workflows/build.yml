@@ -71,7 +71,13 @@ jobs:
       - name: Copy binary
         run: |
           mkdir -p bin || true
-          cp client/target/release/webbou-client bin/client
+          if [ -f client/target/release/webbou-client ]; then
+            cp client/target/release/webbou-client bin/client
+          else
+            echo "Error: webbou-client binary not found"
+            ls -la client/target/release/
+            exit 1
+          fi
       
       - name: Upload client artifact
         uses: actions/upload-artifact@v4
