@@ -1,14 +1,16 @@
-use super::protocol::{Frame, FrameType, FrameFlags, FrameReader};
-use super::crypto::{CryptoEngine, ZeroRTTState};
 use super::compression::{compress, decompress};
-use super::reconnect::{ReconnectStrategy, ConnectionHealth};
+use super::crypto::{CryptoEngine, ZeroRTTState};
 use super::heartbeat::HeartbeatManager;
+use super::protocol::{Frame, FrameFlags, FrameReader, FrameType};
+use super::reconnect::{ConnectionHealth, ReconnectStrategy};
+use native_tls::TlsConnector as NativeTlsConnector;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::RwLock;
-use tokio::net::TcpStream;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpStream;
+use tokio::sync::RwLock;
 use tokio::time::timeout;
+use tokio_native_tls::{TlsConnector, TlsStream};
 use tracing::{info, warn};
 
 pub struct WebBouClient {
@@ -28,7 +30,7 @@ pub struct WebBouClient {
 }
 
 struct Connection {
-    stream: TcpStream,
+    stream: TlsStream<TcpStream>,
     reader: FrameReader,
     next_stream_id: u32,
 }
@@ -78,10 +80,18 @@ impl WebBouClient {
     }
 
     async fn connect_internal(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let stream = timeout(
+        let tcp_stream = timeout(
             Duration::from_secs(10),
-            TcpStream::connect(&self.server_addr)
-        ).await??;
+            TcpStream::connect(&self.server_addr),
+        )
+        .await??;
+
+        let connector = NativeTlsConnector::builder()
+            .danger_accept_invalid_certs(true)
+            .build()?;
+        let connector = TlsConnector::from(connector);
+        let domain = tls_domain(&self.server_addr);
+        let stream = connector.connect(&domain, tcp_stream).await?;
 
         info!("Connected to {}", self.server_addr);
 
@@ -107,17 +117,37 @@ impl WebBouClient {
 
     async fn send_handshake(&self) -> Result<(), Box<dyn std::error::Error>> {
         let handshake_data = format!(
-            "WEBBOU/1.0\nPublicKey: {}",
+            "WEBBOU/1\ntransport=tcp+tls\nPublicKey: {}",
             base64::encode(self.crypto.get_public_key())
         );
 
-        let frame = Frame::new(
-            FrameType::Settings,
-            0,
-            handshake_data.into_bytes(),
-        );
+        let frame = Frame::new(FrameType::Hello, 0, handshake_data.into_bytes());
 
         self.send_frame(frame).await?;
+        self.expect_handshake_ack().await?;
+        Ok(())
+    }
+
+    async fn expect_handshake_ack(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let mut conn = self.connection.write().await;
+        let connection = conn.as_mut().ok_or("Not connected")?;
+
+        let mut buf = vec![0u8; 8192];
+        loop {
+            let n = connection.stream.read(&mut buf).await?;
+            if n == 0 {
+                return Err("Connection closed during handshake".into());
+            }
+
+            connection.reader.feed(&buf[..n]);
+            if let Some(frame) = connection.reader.read_frame()? {
+                if frame.frame_type != FrameType::HelloAck.to_u8() {
+                    return Err("Unexpected handshake response".into());
+                }
+                break;
+            }
+        }
+
         Ok(())
     }
 
@@ -126,26 +156,28 @@ impl WebBouClient {
         let crypto = Arc::clone(&self.crypto);
         let stats = Arc::clone(&self.stats);
 
-        self.heartbeat.start(move |frame| {
-            let connection = Arc::clone(&connection);
-            let _crypto = Arc::clone(&crypto);
-            let stats = Arc::clone(&stats);
+        self.heartbeat
+            .start(move |frame| {
+                let connection = Arc::clone(&connection);
+                let _crypto = Arc::clone(&crypto);
+                let stats = Arc::clone(&stats);
 
-            async move {
-                let data = frame.marshal();
-                
-                let mut conn = connection.write().await;
-                if let Some(connection) = conn.as_mut() {
-                    connection.stream.write_all(&data).await?;
-                    
-                    let mut s = stats.write().await;
-                    s.frames_sent += 1;
-                    s.bytes_sent += data.len() as u64;
+                async move {
+                    let data = frame.marshal();
+
+                    let mut conn = connection.write().await;
+                    if let Some(connection) = conn.as_mut() {
+                        connection.stream.write_all(&data).await?;
+
+                        let mut s = stats.write().await;
+                        s.frames_sent += 1;
+                        s.bytes_sent += data.len() as u64;
+                    }
+
+                    Ok(())
                 }
-
-                Ok(())
-            }
-        }).await;
+            })
+            .await;
     }
 
     #[allow(dead_code)]
@@ -321,10 +353,12 @@ impl WebBouClient {
                     }
                 }
             }
-        }).await {
+        })
+        .await
+        {
             Ok(_) => {
                 let latency = start.elapsed().as_millis();
-                
+
                 let mut stats = self.stats.write().await;
                 stats.avg_latency_ms = latency as u64;
 
@@ -346,10 +380,10 @@ impl WebBouClient {
             match self.connect_internal().await {
                 Ok(_) => {
                     info!("Reconnected successfully");
-                    
+
                     let mut stats = self.stats.write().await;
                     stats.reconnect_count += 1;
-                    
+
                     return Ok(());
                 }
                 Err(e) => {
@@ -382,7 +416,7 @@ impl WebBouClient {
         let _ = self.send_frame(frame).await;
 
         *self.connection.write().await = None;
-        
+
         info!("Connection closed");
         Ok(())
     }
@@ -400,7 +434,10 @@ impl WebBouClient {
     }
 
     #[allow(dead_code)]
-    pub async fn send_with_zero_rtt(&self, data: Vec<u8>) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn send_with_zero_rtt(
+        &self,
+        data: Vec<u8>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let mut zrtt = self.zero_rtt.write().await;
 
         if !zrtt.is_available() {
@@ -416,7 +453,10 @@ impl WebBouClient {
     }
 
     #[allow(dead_code)]
-    pub async fn complete_zero_rtt_handshake(&mut self, session_id: String) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn complete_zero_rtt_handshake(
+        &mut self,
+        session_id: String,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         self.session_id = Some(session_id);
 
         let frame = Frame::new(FrameType::HelloDone, 0, vec![]);
@@ -439,6 +479,15 @@ impl WebBouClient {
     pub async fn get_cipher_suite(&self) -> String {
         self.crypto.get_cipher_suite().to_string()
     }
+}
+
+fn tls_domain(server_addr: &str) -> String {
+    server_addr
+        .split(':')
+        .next()
+        .filter(|host| !host.is_empty())
+        .unwrap_or("localhost")
+        .to_string()
 }
 
 // Helper for base64 encoding

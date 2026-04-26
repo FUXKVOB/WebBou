@@ -30,6 +30,11 @@ impl SpinLock {
     pub fn unlock(&self) {
         self.locked.store(false, Ordering::Release);
     }
+
+    #[allow(dead_code)]
+    pub fn is_locked(&self) -> bool {
+        self.locked.load(Ordering::Acquire)
+    }
 }
 
 impl Default for SpinLock {
@@ -112,10 +117,11 @@ impl BackPressureController {
 
     #[allow(dead_code)]
     pub fn release(&self, amount: u64) {
-        self.current_usage.fetch_sub(amount, Ordering::SeqCst);
-
         let current = self.current_usage.load(Ordering::SeqCst);
-        if current < self.low_water_mark && self.paused.load(Ordering::SeqCst) {
+        let new_usage = current.saturating_sub(amount);
+        self.current_usage.store(new_usage, Ordering::SeqCst);
+
+        if new_usage < self.low_water_mark && self.paused.load(Ordering::SeqCst) {
             self.paused.store(false, Ordering::SeqCst);
         }
     }

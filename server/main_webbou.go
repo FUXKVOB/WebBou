@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/tls"
 	"log"
+
 	"webbou/server/webbou"
 )
 
@@ -13,8 +14,8 @@ func main() {
 	}
 
 	config := &webbou.ServerConfig{
-		QUICAddr:     "0.0.0.0:8443",
-		TCPAddr:      "0.0.0.0:8444",
+		QUICAddr:     "",
+		TCPAddr:      "0.0.0.0:8443",
 		MaxStreams:   1000,
 		MaxFrameSize: 65536,
 		TLSConfig: &tls.Config{
@@ -28,16 +29,12 @@ func main() {
 		log.Fatal("Failed to create server:", err)
 	}
 
-	log.Println("╔═══════════════════════════════════════╗")
-	log.Println("║       WebBou Server v1.0              ║")
-	log.Println("║  Собственный протокол Go + Rust       ║")
-	log.Println("╚═══════════════════════════════════════╝")
-	log.Println()
+	log.Println("WebBou Server v1")
+	log.Println("Minimal contract: TCP + TLS on :8443")
 
 	if err := server.Start(); err != nil {
 		log.Fatal("Server failed:", err)
 	}
 
-	// Block forever
 	select {}
 }

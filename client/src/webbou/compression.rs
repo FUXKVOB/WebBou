@@ -6,7 +6,7 @@ pub fn compress(data: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     }
 
     let compressed = compress_prepend_size(data);
-    
+
     // Only use if actually smaller
     if compressed.len() < data.len() {
         Ok(compressed)
@@ -16,8 +16,7 @@ pub fn compress(data: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
 }
 
 pub fn decompress(data: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    decompress_size_prepended(data)
-        .map_err(|e| format!("Decompression failed: {}", e).into())
+    decompress_size_prepended(data).map_err(|e| format!("Decompression failed: {}", e).into())
 }
 
 #[allow(dead_code)]
@@ -34,13 +33,13 @@ pub fn estimate_compression_ratio(data: &[u8]) -> f64 {
     // Sample entropy
     let sample = &data[..100.min(data.len())];
     let mut unique = std::collections::HashSet::new();
-    
+
     for &byte in sample {
         unique.insert(byte);
     }
 
     let entropy = unique.len() as f64 / sample.len() as f64;
-    
+
     // High entropy = poor compression
     if entropy > 0.8 {
         0.9

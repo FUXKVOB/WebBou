@@ -151,7 +151,7 @@ jobs:
           Быстрый старт:
           
           1. Создать сертификаты:
-             openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes -subj "/CN=localhost"
+             powershell -ExecutionPolicy Bypass -File scripts\generate-dev-cert.ps1
           
           2. Запустить сервер:
              ./${{ matrix.server_name }}

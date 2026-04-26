@@ -1,68 +1,49 @@
 # WebBou Quick Start
 
-## Установка
+This document matches the production path in the repository today.
+
+## Minimal Contract
+
+- transport: `TCP + TLS`
+- server port: `8443`
+- wire version: `v1`
+- handshake: `HELLO -> HELLO_ACK`
+
+## Prerequisites
+
+- Go `1.26+`
+- Rust `1.77+`
+- PowerShell on Windows, or OpenSSL on Linux/macOS
+
+## Build
 
 ```bash
-# Требования: Go 1.26+, Rust 1.77+
 make all
 ```
 
-## Запуск
+## Generate Development Certificates
+
+```powershell
+make dev-cert
+```
+
+## Run
 
 ```bash
-# Сервер
 make run-server
-
-# Клиент (другой терминал)
 make run-client
 ```
 
-## Примеры
-
-### Базовое подключение
-
-```rust
-use webbou::WebBouClient;
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let client = WebBouClient::new("localhost:8443".to_string());
-    client.connect().await?;
-    
-    // Отправить (data, reliable, compress, encrypt)
-    client.send(b"Hello!".to_vec(), true, false, false).await?;
-    
-    let response = client.recv().await?;
-    println!("Received: {:?}", String::from_utf8_lossy(&response));
-    
-    Ok(())
-}
-```
-
-### Сжатие и шифрование
-
-```rust
-// Сжатие (LZ4)
-client.send(large_data, true, true, false).await?;
-
-// Шифрование (ChaCha20-Poly1305)
-client.send(secret_data, true, false, true).await?;
-```
-
-### Unreliable режим
-
-```rust
-// Быстрая отправка без гарантий
-for i in 0..1000 {
-    client.send(format!("Frame {}", i).into_bytes(), false, false, false).await?;
-}
-```
-
-## Команды
+## Validate the Repo
 
 ```bash
-make test           # Тесты
-make benchmark      # Бенчмарки
-make deps-update    # Обновить зависимости
-make versions       # Показать версии
+cd server && go build ./... && go test ./...
+cd client && cargo build && cargo test
 ```
+
+## Notes
+
+- The client uses TLS for the production path.
+- The current development setup accepts the local self-signed certificate.
+- Experimental binaries live outside the production flow.
+- On Linux and macOS, `openssl` can generate the same `cert.pem` and `key.pem` files.

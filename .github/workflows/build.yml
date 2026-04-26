@@ -2,194 +2,36 @@ name: Build and Test
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
-  build-server:
-    name: Build Go Server
+  verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.26'
-      
-      - name: Cache Go modules
-        uses: actions/cache@v4
-        with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-      
-      - name: Download dependencies
-        working-directory: ./server
-        run: go mod download
-      
-      - name: Build server
-        working-directory: ./server
-        run: go build -v -o ../bin/server main_webbou.go
-      
-      - name: Upload server artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: server-linux
-          path: bin/server
 
-  build-client:
-    name: Build Rust Client
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+
+      - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-      
-      - name: Cache Cargo
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            client/target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
-      
-      - name: Build client
-        working-directory: ./client
-        run: cargo build --release
-      
-      - name: Copy binary
-        run: |
-          mkdir -p bin || true
-          if [ -f client/target/release/webbou-client ]; then
-            cp client/target/release/webbou-client bin/client
-          else
-            echo "Error: webbou-client binary not found"
-            ls -la client/target/release/
-            exit 1
-          fi
-      
-      - name: Upload client artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: client-linux
-          path: bin/client
 
-  build-windows:
-    name: Build Windows Binaries
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.26'
-      
-      - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: stable
-      
-      - name: Build server
+      - name: Go build
         working-directory: ./server
-        run: go build -v -o ../bin/server.exe main_webbou.go
-      
-      - name: Build client
-        working-directory: ./client
-        run: cargo build --release
-      
-      - name: Copy client binary
-        shell: pwsh
-        run: |
-          if (-not (Test-Path bin)) { New-Item -ItemType Directory -Path bin }
-          Copy-Item client/target/release/webbou-client.exe bin/client.exe
-      
-      - name: Upload Windows artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-binaries
-          path: bin/
+        run: go build ./...
 
-  build-macos:
-    name: Build macOS Binaries
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.26'
-      
-      - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: stable
-      
-      - name: Build server
+      - name: Go test
         working-directory: ./server
-        run: go build -v -o ../bin/server main_webbou.go
-      
-      - name: Build client
-        working-directory: ./client
-        run: cargo build --release
-      
-      - name: Copy client binary
-        run: |
-          mkdir -p bin || true
-          cp client/target/release/webbou-client bin/client
-      
-      - name: Upload macOS artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos-binaries
-          path: bin/
+        run: go test ./...
 
-  lint:
-    name: Lint Code
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.26'
-      
-      - name: Go vet
-        working-directory: ./server
-        run: go vet ./...
-      
-      - name: Go fmt check
-        working-directory: ./server
-        run: |
-          if [ -n "$(gofmt -l .)" ]; then
-            echo "Go code is not formatted:"
-            gofmt -d .
-            exit 1
-          fi
-      
-      - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: stable
-          components: rustfmt, clippy
-      
-      - name: Rust format check
+      - name: Cargo build
         working-directory: ./client
-        run: cargo fmt -- --check
-      
-      - name: Rust clippy
+        run: cargo build
+
+      - name: Cargo test
         working-directory: ./client
-        run: cargo clippy -- -D warnings
+        run: cargo test

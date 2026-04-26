@@ -32,29 +32,15 @@ pub const FLAG_PRIORITY_HIGH: u8 = 0x08;
 pub const FLAG_FRAGMENTED: u8 = 0x10;
 #[allow(dead_code)]
 pub const FLAG_FINAL: u8 = 0x20;
-// New flags
 #[allow(dead_code)]
 pub const FLAG_ZERO_RTT: u8 = 0x40;
 #[allow(dead_code)]
 pub const FLAG_MULTI_PATH: u8 = 0x80;
-#[allow(dead_code)]
-pub const FLAG_RESUMED: u16 = 0x100;
-#[allow(dead_code)]
-pub const FLAG_ACK_EAGER: u16 = 0x200;
-#[allow(dead_code)]
-pub const FLAG_PTO: u16 = 0x400;
 
 // Protocol constants
 pub const MAGIC_BYTE: u8 = 0xB0;
-pub const VERSION: u8 = 0x03;
+pub const VERSION: u8 = 0x01;
 pub const HEADER_SIZE: usize = 16;
-
-#[allow(dead_code)]
-pub const PROTO_VERSION_1_0: u8 = 0x01;
-#[allow(dead_code)]
-pub const PROTO_VERSION_1_1: u8 = 0x02;
-#[allow(dead_code)]
-pub const PROTO_VERSION_3_0: u8 = 0x03;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(dead_code)]
@@ -159,9 +145,9 @@ impl Frame {
     pub fn marshal(&self) -> Vec<u8> {
         let payload_len = self.payload.len() as u32;
         let total_len = HEADER_SIZE + self.payload.len();
-        
+
         let mut buf = Vec::with_capacity(total_len);
-        
+
         // Header
         buf.push(MAGIC_BYTE);
         buf.push(VERSION);
@@ -169,16 +155,19 @@ impl Frame {
         buf.push(self.flags);
         buf.extend_from_slice(&self.stream_id.to_be_bytes());
         buf.extend_from_slice(&payload_len.to_be_bytes());
-        
-        // Calculate CRC32 of payload
+
+        // Calculate CRC32 over the frame header fields plus payload.
         let mut hasher = Hasher::new();
+        hasher.update(&[MAGIC_BYTE, VERSION, self.frame_type, self.flags]);
+        hasher.update(&self.stream_id.to_be_bytes());
+        hasher.update(&payload_len.to_be_bytes());
         hasher.update(&self.payload);
         let checksum = hasher.finalize();
         buf.extend_from_slice(&checksum.to_be_bytes());
-        
+
         // Payload
         buf.extend_from_slice(&self.payload);
-        
+
         buf
     }
 
@@ -197,7 +186,7 @@ impl Frame {
 
         let frame_type = data[2];
         let flags = data[3];
-        
+
         let stream_id = u32::from_be_bytes([data[4], data[5], data[6], data[7]]);
         let payload_len = u32::from_be_bytes([data[8], data[9], data[10], data[11]]) as usize;
         let checksum = u32::from_be_bytes([data[12], data[13], data[14], data[15]]);
@@ -208,8 +197,11 @@ impl Frame {
 
         let payload = data[HEADER_SIZE..HEADER_SIZE + payload_len].to_vec();
 
-        // Verify checksum
+        // Verify checksum against the same header fields used during marshal.
         let mut hasher = Hasher::new();
+        hasher.update(&[MAGIC_BYTE, VERSION, frame_type, flags]);
+        hasher.update(&stream_id.to_be_bytes());
+        hasher.update(&(payload_len as u32).to_be_bytes());
         hasher.update(&payload);
         if hasher.finalize() != checksum {
             return Err("Checksum mismatch".into());
@@ -230,9 +222,7 @@ pub struct FrameReader {
 
 impl FrameReader {
     pub fn new() -> Self {
-        Self {
-            buffer: Vec::new(),
-        }
+        Self { buffer: Vec::new() }
     }
 
     pub fn feed(&mut self, data: &[u8]) {
@@ -266,5 +256,40 @@ impl FrameReader {
         let frame = Frame::unmarshal(&frame_data)?;
 
         Ok(Some(frame))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Frame, FrameType};
+
+    const GOLDEN_FRAME_HEX: &str = include_str!("../../../protocol/testdata/data_frame_v1.hex");
+
+    fn decode_hex(input: &str) -> Vec<u8> {
+        let trimmed = input.trim();
+        let mut bytes = Vec::with_capacity(trimmed.len() / 2);
+
+        let mut chars = trimmed.chars();
+        while let (Some(high), Some(low)) = (chars.next(), chars.next()) {
+            let high = high.to_digit(16).expect("valid hex") as u8;
+            let low = low.to_digit(16).expect("valid hex") as u8;
+            bytes.push((high << 4) | low);
+        }
+
+        bytes
+    }
+
+    #[test]
+    fn marshals_to_golden_frame() {
+        let frame = Frame::new(FrameType::Data, 7, b"ping".to_vec());
+        assert_eq!(frame.marshal(), decode_hex(GOLDEN_FRAME_HEX));
+    }
+
+    #[test]
+    fn unmarshals_golden_frame() {
+        let frame = Frame::unmarshal(&decode_hex(GOLDEN_FRAME_HEX)).expect("golden frame");
+        assert_eq!(frame.frame_type, FrameType::Data.to_u8());
+        assert_eq!(frame.stream_id, 7);
+        assert_eq!(frame.payload, b"ping");
     }
 }

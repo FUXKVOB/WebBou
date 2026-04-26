@@ -3,4 +3,4 @@
 
 pub mod webbou;
 
-pub use webbou::{WebBouClient, Frame, FrameType, FrameFlags, CryptoEngine};
+pub use webbou::{CryptoEngine, Frame, FrameFlags, FrameType, WebBouClient};

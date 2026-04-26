@@ -1,10 +1,10 @@
 use chacha20poly1305::{
-    aead::{Aead, KeyInit, OsRng, rand_core::RngCore},
+    aead::{rand_core::RngCore, Aead, KeyInit, OsRng},
     XChaCha20Poly1305, XNonce,
 };
-use x25519_dalek::{EphemeralSecret, PublicKey};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
+use x25519_dalek::{EphemeralSecret, PublicKey};
 
 pub struct CryptoEngine {
     #[allow(dead_code)]
@@ -97,7 +97,8 @@ impl CryptoEngine {
         OsRng.fill_bytes(&mut nonce_bytes);
         let nonce = XNonce::from_slice(&nonce_bytes);
 
-        let ciphertext = self.cipher
+        let ciphertext = self
+            .cipher
             .encrypt(nonce, plaintext)
             .map_err(|e| format!("Encryption failed: {}", e))?;
 
@@ -115,7 +116,8 @@ impl CryptoEngine {
         let nonce = XNonce::from_slice(&data[..24]);
         let ciphertext = &data[24..];
 
-        let plaintext = self.cipher
+        let plaintext = self
+            .cipher
             .decrypt(nonce, ciphertext)
             .map_err(|e| format!("Decryption failed: {}", e))?;
 
@@ -123,7 +125,11 @@ impl CryptoEngine {
     }
 
     #[allow(dead_code)]
-    pub fn encrypt_session(&mut self, _session_id: &str, plaintext: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    pub fn encrypt_session(
+        &mut self,
+        _session_id: &str,
+        plaintext: &[u8],
+    ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         if self.session_key.is_none() {
             return self.encrypt(plaintext);
         }
@@ -152,7 +158,11 @@ impl CryptoEngine {
     }
 
     #[allow(dead_code)]
-    pub fn decrypt_session(&mut self, _session_id: &str, data: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    pub fn decrypt_session(
+        &mut self,
+        _session_id: &str,
+        data: &[u8],
+    ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         if self.session_key.is_none() {
             return self.decrypt(data);
         }
@@ -195,7 +205,10 @@ impl CryptoEngine {
     }
 
     #[allow(dead_code)]
-    pub fn derive_shared_secret(&self, peer_public_key: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    pub fn derive_shared_secret(
+        &self,
+        peer_public_key: &[u8],
+    ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         if peer_public_key.len() != 32 {
             return Err("Invalid public key length".into());
         }
@@ -295,7 +308,10 @@ impl ZeroRTTState {
     }
 
     #[allow(dead_code)]
-    pub fn encrypt_early_data(&mut self, plaintext: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    pub fn encrypt_early_data(
+        &mut self,
+        plaintext: &[u8],
+    ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         if self.early_key.is_none() {
             return Err("0-RTT not available".into());
         }
@@ -323,7 +339,10 @@ impl ZeroRTTState {
     }
 
     #[allow(dead_code)]
-    pub fn decrypt_early_data(&mut self, data: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    pub fn decrypt_early_data(
+        &mut self,
+        data: &[u8],
+    ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         if self.early_key.is_none() {
             return Err("0-RTT not available".into());
         }
@@ -400,15 +419,18 @@ impl MultiPathManager {
         self.active_id += 1;
         let id = self.active_id;
 
-        self.paths.insert(id, PathState {
-            local_addr,
-            remote_addr,
-            active: true,
-            latency: Duration::ZERO,
-            last_active: Instant::now(),
-            rx_bytes: 0,
-            tx_bytes: 0,
-        });
+        self.paths.insert(
+            id,
+            PathState {
+                local_addr,
+                remote_addr,
+                active: true,
+                latency: Duration::ZERO,
+                last_active: Instant::now(),
+                rx_bytes: 0,
+                tx_bytes: 0,
+            },
+        );
 
         id
     }
@@ -502,7 +524,11 @@ impl FlowControlManager {
 
     #[allow(dead_code)]
     pub fn consume_stream_data(&mut self, stream_id: u32, amount: u64) -> bool {
-        let avail = self.avail_stream_data.get(&stream_id).copied().unwrap_or(self.max_stream_data);
+        let avail = self
+            .avail_stream_data
+            .get(&stream_id)
+            .copied()
+            .unwrap_or(self.max_stream_data);
 
         if avail >= amount {
             self.avail_stream_data.insert(stream_id, avail - amount);
@@ -529,7 +555,11 @@ impl FlowControlManager {
 
     #[allow(dead_code)]
     pub fn is_stream_blocked(&self, stream_id: u32) -> bool {
-        self.avail_stream_data.get(&stream_id).copied().unwrap_or(self.max_stream_data) == 0
+        self.avail_stream_data
+            .get(&stream_id)
+            .copied()
+            .unwrap_or(self.max_stream_data)
+            == 0
     }
 
     #[allow(dead_code)]
@@ -539,6 +569,9 @@ impl FlowControlManager {
 
     #[allow(dead_code)]
     pub fn get_available_stream_data(&self, stream_id: u32) -> u64 {
-        self.avail_stream_data.get(&stream_id).copied().unwrap_or(self.max_stream_data)
+        self.avail_stream_data
+            .get(&stream_id)
+            .copied()
+            .unwrap_or(self.max_stream_data)
     }
 }

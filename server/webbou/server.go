@@ -3,6 +3,7 @@ package webbou
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"log"
 	"net"
 	"sync"
@@ -13,23 +14,23 @@ import (
 )
 
 type Server struct {
-	quicListener      net.Listener
-	tcpListener       net.Listener
-	sessions          sync.Map
-	config            *ServerConfig
-	crypto            *CryptoEngine
-	rateLimiter       *RateLimiter
-	connLimiter       *ConnectionRateLimiter
-	sessionManager    *SessionManager
-	bufferPool        *BufferPool
-	framePool         *FramePool
+	quicListener   net.Listener
+	tcpListener    net.Listener
+	sessions       sync.Map
+	config         *ServerConfig
+	crypto         *CryptoEngine
+	rateLimiter    *RateLimiter
+	connLimiter    *ConnectionRateLimiter
+	sessionManager *SessionManager
+	bufferPool     *BufferPool
+	framePool      *FramePool
 
-	batchSender        *BatchSender
-	backPressure     *BackPressureMonitor
-	ddosProtector     *DDOSProtector
-	ipReputation      *IPReputationManager
+	batchSender   *BatchSender
+	backPressure  *BackPressureMonitor
+	ddosProtector *DDOSProtector
+	ipReputation  *IPReputationManager
 
-	statsMutex        atomic.Value
+	statsMutex atomic.Value
 }
 
 type Session struct {
@@ -67,23 +68,34 @@ func NewServer(config *ServerConfig) (*Server, error) {
 		bufferPool:     NewBufferPool(8192),
 		framePool:      NewFramePool(),
 		batchSender:    NewBatchSender(100),
-		backPressure:  NewBackPressureMonitor(0.8, 0.95),
+		backPressure:   NewBackPressureMonitor(0.8, 0.95),
 		ddosProtector:  NewDDOSProtector(100, 1000, 60),
 		ipReputation:   NewIPReputationManager(),
 	}, nil
 }
 
 func (s *Server) Start() error {
-	// Start QUIC listener
-	go s.startQUIC()
-	
-	// Start TCP fallback listener
-	go s.startTCP()
-	
+	if s.config == nil {
+		return fmt.Errorf("server config is nil")
+	}
+	if s.config.QUICAddr != "" {
+		go s.startQUIC()
+	}
+	if s.config.TCPAddr != "" {
+		go s.startTCP()
+	}
+	if s.config.QUICAddr == "" && s.config.TCPAddr == "" {
+		return fmt.Errorf("no listeners configured")
+	}
+
 	log.Println("WebBou server started")
-	log.Printf("  QUIC: %s", s.config.QUICAddr)
-	log.Printf("  TCP:  %s", s.config.TCPAddr)
-	
+	if s.config.QUICAddr != "" {
+		log.Printf("  QUIC: %s", s.config.QUICAddr)
+	}
+	if s.config.TCPAddr != "" {
+		log.Printf("  TCP:  %s", s.config.TCPAddr)
+	}
+
 	return nil
 }
 
@@ -255,6 +267,8 @@ func (s *Server) handleFrame(session *Session, frame *Frame, writer interface{})
 	session.stats.BytesRecv += uint64(len(frame.Payload))
 
 	switch frame.Type {
+	case FrameHello:
+		s.handleHelloFrame(session, frame, writer)
 	case FrameData:
 		s.handleDataFrame(session, frame, writer)
 	case FramePing:
@@ -266,6 +280,11 @@ func (s *Server) handleFrame(session *Session, frame *Frame, writer interface{})
 	default:
 		log.Printf("Unknown frame type: 0x%02x", frame.Type)
 	}
+}
+
+func (s *Server) handleHelloFrame(session *Session, frame *Frame, writer interface{}) {
+	response := NewFrame(FrameHelloAck, 0, []byte("WEBBOU/1 transport=tcp+tls"))
+	s.sendFrame(session, response, writer)
 }
 
 func (s *Server) handleDataFrame(session *Session, frame *Frame, writer interface{}) {
@@ -325,7 +344,7 @@ func (s *Server) sendFrame(session *Session, frame *Frame, writer interface{}) {
 
 func (s *Server) createSession(remoteAddr string) *Session {
 	ctx, cancel := context.WithCancel(context.Background())
-	
+
 	session := &Session{
 		ID:        generateSessionID(),
 		sendQueue: make(chan *Frame, 1000),

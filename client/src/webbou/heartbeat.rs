@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
 use tokio::time::interval;
-use tracing::{debug, warn, error};
+use tracing::{debug, error, warn};
 
 use super::protocol::{Frame, FrameType};
 
@@ -26,7 +26,8 @@ impl HeartbeatManager {
     pub async fn start<F, Fut>(&self, mut send_fn: F)
     where
         F: FnMut(Frame) -> Fut + Send + 'static,
-        Fut: std::future::Future<Output = Result<(), Box<dyn std::error::Error + Send + Sync>>> + Send,
+        Fut: std::future::Future<Output = Result<(), Box<dyn std::error::Error + Send + Sync>>>
+            + Send,
     {
         *self.is_running.write().await = true;
 
@@ -54,9 +55,9 @@ impl HeartbeatManager {
 
                 if elapsed >= interval_duration {
                     debug!("Sending heartbeat ping");
-                    
+
                     let ping_frame = Frame::new(FrameType::Ping, 0, vec![]);
-                    
+
                     if let Err(e) = send_fn(ping_frame).await {
                         warn!("Failed to send heartbeat: {}", e);
                         break;

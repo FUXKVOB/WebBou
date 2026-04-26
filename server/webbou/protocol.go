@@ -7,26 +7,26 @@ import (
 )
 
 const (
-	MagicByte   = 0xB0
-	Version     = 0x01
-	HeaderSize  = 16
+	MagicByte  = 0xB0
+	Version    = 0x01
+	HeaderSize = 16
 )
 
 // Frame types
 const (
-	FrameData          = 0x01
+	FrameData        = 0x01
 	FramePing        = 0x02
-	FramePong       = 0x03
+	FramePong        = 0x03
 	FrameStreamOpen  = 0x04
 	FrameStreamClose = 0x05
-	FrameAck        = 0x06
-	FrameReset      = 0x07
-	FrameSettings   = 0x08
+	FrameAck         = 0x06
+	FrameReset       = 0x07
+	FrameSettings    = 0x08
 	// New frame types for advanced features
-	FrameHello         = 0x10 // 0-RTT initial handshake
-	FrameHelloAck      = 0x11 // 0-RTT ack
-	FrameHelloDone     = 0x12 // 0-RTT handshake complete
-	FrameMultiPath    = 0x20 // Multi-path connection
+	FrameHello       = 0x10 // 0-RTT initial handshake
+	FrameHelloAck    = 0x11 // 0-RTT ack
+	FrameHelloDone   = 0x12 // 0-RTT handshake complete
+	FrameMultiPath   = 0x20 // Multi-path connection
 	FramePathClose   = 0x21 // Close a path
 	FrameFlowControl = 0x30 // Flow control update
 	FrameMaxData     = 0x31 // Max data window
@@ -36,29 +36,25 @@ const (
 
 // Flags
 const (
-	FlagCompressed    = 0x01
-	FlagEncrypted     = 0x02
-	FlagReliable      = 0x04
+	FlagCompressed   = 0x01
+	FlagEncrypted    = 0x02
+	FlagReliable     = 0x04
 	FlagPriorityHigh = 0x08
 	FlagFragmented   = 0x10
 	FlagFinal        = 0x20
-	// New flags for advanced features
-	FlagZeroRTT    = 0x40 // 0-RTT early data
-	FlagMultiPath = 0x80 // Multi-path frame
-	FlagResumed   = 0x100 // Session resumed
-	FlagAckEager  = 0x200 // Immediate ACK requested
-	FlagPTO       = 0x400 ; // Probe Timeout (loss detection)
+	FlagZeroRTT      = 0x40 // 0-RTT early data
+	FlagMultiPath    = 0x80 // Multi-path frame
 )
 
 type Frame struct {
-	Magic      uint8
-	Version    uint8
-	Type       uint8
-	Flags      uint8
-	StreamID   uint32
-	Length     uint32
-	Checksum   uint32
-	Payload    []byte
+	Magic    uint8
+	Version  uint8
+	Type     uint8
+	Flags    uint8
+	StreamID uint32
+	Length   uint32
+	Checksum uint32
+	Payload  []byte
 }
 
 func NewFrame(frameType uint8, streamID uint32, payload []byte) *Frame {
@@ -92,7 +88,7 @@ func (f *Frame) calculateChecksum() uint32 {
 	binary.BigEndian.PutUint32(data[4:8], f.StreamID)
 	binary.BigEndian.PutUint32(data[8:12], f.Length)
 	copy(data[12:], f.Payload)
-	
+
 	return crc32.ChecksumIEEE(data)
 }
 
@@ -114,7 +110,7 @@ func (f *Frame) Validate() error {
 
 func (f *Frame) Marshal() []byte {
 	buf := make([]byte, HeaderSize+len(f.Payload))
-	
+
 	buf[0] = f.Magic
 	buf[1] = f.Version
 	buf[2] = f.Type
@@ -123,7 +119,7 @@ func (f *Frame) Marshal() []byte {
 	binary.BigEndian.PutUint32(buf[8:12], f.Length)
 	binary.BigEndian.PutUint32(buf[12:16], f.Checksum)
 	copy(buf[16:], f.Payload)
-	
+
 	return buf
 }
 
@@ -131,7 +127,7 @@ func UnmarshalFrame(data []byte) (*Frame, error) {
 	if len(data) < HeaderSize {
 		return nil, errors.New("data too short")
 	}
-	
+
 	frame := &Frame{
 		Magic:    data[0],
 		Version:  data[1],
@@ -141,17 +137,17 @@ func UnmarshalFrame(data []byte) (*Frame, error) {
 		Length:   binary.BigEndian.Uint32(data[8:12]),
 		Checksum: binary.BigEndian.Uint32(data[12:16]),
 	}
-	
+
 	if len(data) < HeaderSize+int(frame.Length) {
 		return nil, errors.New("incomplete frame")
 	}
-	
+
 	frame.Payload = data[HeaderSize : HeaderSize+frame.Length]
-	
+
 	if err := frame.Validate(); err != nil {
 		return nil, err
 	}
-	
+
 	return frame, nil
 }
 
@@ -174,21 +170,21 @@ func (fr *FrameReader) ReadFrame() (*Frame, error) {
 	if len(fr.buffer) < HeaderSize {
 		return nil, nil // Need more data
 	}
-	
+
 	length := binary.BigEndian.Uint32(fr.buffer[8:12])
 	totalSize := HeaderSize + int(length)
-	
+
 	if len(fr.buffer) < totalSize {
 		return nil, nil // Need more data
 	}
-	
+
 	frame, err := UnmarshalFrame(fr.buffer[:totalSize])
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Remove processed data
 	fr.buffer = fr.buffer[totalSize:]
-	
+
 	return frame, nil
 }
