@@ -6,7 +6,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	_ "unsafe"
 )
 
 type BufferPool struct {
@@ -30,7 +29,7 @@ func (bp *BufferPool) Get() []byte {
 }
 
 func (bp *BufferPool) Put(buf []byte) {
-	bp.pool.Put(buf[:cap(buf)])
+	bp.pool.Put(buf)
 }
 
 type FramePool struct {
@@ -106,107 +105,6 @@ func (sl *SpinLock) Lock() {
 
 func (sl *SpinLock) Unlock() {
 	atomic.StoreInt32(&sl.locked, 0)
-}
-
-type BatchSender struct {
-	queue    chan *writeRequest
-	workers int
-	pool    *sync.Pool
-}
-
-type writeRequest struct {
-	data []byte
-	done  chan error
-}
-
-func NewBatchSender(workers int) *BatchSender {
-	bs := &BatchSender{
-		queue:    make(chan *writeRequest, 10000),
-		workers: workers,
-		pool: &sync.Pool{
-			New: func() interface{} {
-				return &writeRequest{
-					done: make(chan error, 1),
-				}
-			},
-		},
-	}
-
-	for i := 0; i < workers; i++ {
-		go bs.worker(i)
-	}
-
-	return bs
-}
-
-func (bs *BatchSender) worker(_ int) {
-	var pending []*writeRequest
-	ticker := time.NewTicker(100 * time.Microsecond)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case req := <-bs.queue:
-			pending = append(pending, req)
-			if len(pending) >= 32 {
-				bs.flush(pending)
-				pending = nil
-			}
-		case <-ticker.C:
-			if len(pending) > 0 {
-				bs.flush(pending)
-				pending = nil
-			}
-		}
-	}
-}
-
-func (bs *BatchSender) flush(pending []*writeRequest) {
-	if len(pending) == 0 {
-		return
-	}
-
-	total := 0
-	for _, req := range pending {
-		total += len(req.data)
-	}
-
-	buf := make([]byte, total)
-	offset := 0
-	for _, req := range pending {
-		n := copy(buf[offset:], req.data)
-		offset += n
-	}
-
-	_ = buf
-	var writeErr error
-	for _, req := range pending {
-		select {
-		case req.done <- writeErr:
-		default:
-		}
-	}
-}
-
-func (bs *BatchSender) Write(data []byte) error {
-	req := bs.pool.Get().(*writeRequest)
-	defer bs.pool.Put(req)
-
-	req.data = data
-	select {
-	case bs.queue <- req:
-		return <-req.done
-	default:
-		return &serverError{msg: "server busy, try again later"}
-	}
-}
-
-type serverError struct {
-	msg string
-}
-
-func (e *serverError) Error() string {
-	return e.msg
 }
 
 type BackPressureMonitor struct {

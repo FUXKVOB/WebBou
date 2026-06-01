@@ -218,11 +218,15 @@ impl Frame {
 
 pub struct FrameReader {
     buffer: Vec<u8>,
+    max_length: u32,
 }
 
 impl FrameReader {
-    pub fn new() -> Self {
-        Self { buffer: Vec::new() }
+    pub fn new(max_length: u32) -> Self {
+        Self {
+            buffer: Vec::new(),
+            max_length,
+        }
     }
 
     pub fn feed(&mut self, data: &[u8]) {
@@ -234,7 +238,6 @@ impl FrameReader {
             return Ok(None);
         }
 
-        // Check for magic byte
         if self.buffer[0] != MAGIC_BYTE {
             return Err("Invalid magic byte".into());
         }
@@ -244,9 +247,17 @@ impl FrameReader {
             self.buffer[9],
             self.buffer[10],
             self.buffer[11],
-        ]) as usize;
+        ]);
 
-        let frame_len = HEADER_SIZE + payload_len;
+        if self.max_length > 0 && payload_len > self.max_length {
+            return Err(format!(
+                "frame too large: {} > {}",
+                payload_len, self.max_length
+            )
+            .into());
+        }
+
+        let frame_len = HEADER_SIZE + payload_len as usize;
 
         if self.buffer.len() < frame_len {
             return Ok(None);

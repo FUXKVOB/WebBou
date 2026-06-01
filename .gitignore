@@ -1,5 +1,7 @@
 # Binaries
 bin/
+**/bin/
+server/main_webbou
 *.exe
 *.dll
 *.so

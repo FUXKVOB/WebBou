@@ -1,5 +1,6 @@
 use super::compression::{compress, decompress};
-use super::crypto::{CryptoEngine, ZeroRTTState};
+use super::config::Config;
+use super::crypto::CryptoEngine;
 use super::heartbeat::HeartbeatManager;
 use super::protocol::{Frame, FrameFlags, FrameReader, FrameType};
 use super::reconnect::{ConnectionHealth, ReconnectStrategy};
@@ -21,10 +22,10 @@ pub struct WebBouClient {
     reconnect_strategy: Arc<RwLock<ReconnectStrategy>>,
     health: Arc<RwLock<ConnectionHealth>>,
     heartbeat: Arc<HeartbeatManager>,
+    config: Arc<RwLock<Config>>,
+    insecure_tls: bool,
     #[allow(dead_code)]
     auto_reconnect: bool,
-    #[allow(dead_code)]
-    zero_rtt: Arc<RwLock<ZeroRTTState>>,
     #[allow(dead_code)]
     session_id: Option<String>,
 }
@@ -63,8 +64,9 @@ impl WebBouClient {
                 Duration::from_secs(10),
                 Duration::from_secs(30),
             )),
+            config: Arc::new(RwLock::new(Config::default())),
+            insecure_tls: false,
             auto_reconnect: true,
-            zero_rtt: Arc::new(RwLock::new(ZeroRTTState::new())),
             session_id: None,
         }
     }
@@ -72,6 +74,11 @@ impl WebBouClient {
     #[allow(dead_code)]
     pub fn with_auto_reconnect(mut self, enabled: bool) -> Self {
         self.auto_reconnect = enabled;
+        self
+    }
+
+    pub fn with_insecure_tls(mut self, enabled: bool) -> Self {
+        self.insecure_tls = enabled;
         self
     }
 
@@ -86,18 +93,22 @@ impl WebBouClient {
         )
         .await??;
 
-        let connector = NativeTlsConnector::builder()
-            .danger_accept_invalid_certs(true)
-            .build()?;
+        let mut builder = NativeTlsConnector::builder();
+        if self.insecure_tls {
+            warn!("TLS certificate validation disabled (insecure_tls=true)");
+            builder.danger_accept_invalid_certs(true);
+        }
+        let connector = builder.build()?;
         let connector = TlsConnector::from(connector);
         let domain = tls_domain(&self.server_addr);
         let stream = connector.connect(&domain, tcp_stream).await?;
 
         info!("Connected to {}", self.server_addr);
 
+        let max_frame_size = self.config.read().await.limits.max_frame_size as u32;
         let connection = Connection {
             stream,
-            reader: FrameReader::new(),
+            reader: FrameReader::new(max_frame_size),
             next_stream_id: 1,
         };
 
@@ -421,63 +432,10 @@ impl WebBouClient {
         Ok(())
     }
 
-    // 0-RTT methods
     #[allow(dead_code)]
-    pub async fn enable_zero_rtt(&self, psk_identity: String, secret: &[u8]) {
-        let mut zrtt = self.zero_rtt.write().await;
-        zrtt.generate_psk(psk_identity, secret);
-    }
-
-    #[allow(dead_code)]
-    pub async fn is_zero_rtt_available(&self) -> bool {
-        self.zero_rtt.read().await.is_available()
-    }
-
-    #[allow(dead_code)]
-    pub async fn send_with_zero_rtt(
-        &self,
-        data: Vec<u8>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let mut zrtt = self.zero_rtt.write().await;
-
-        if !zrtt.is_available() {
-            return Err("0-RTT not available".into());
-        }
-
-        let encrypted = zrtt.encrypt_early_data(&data)?;
-
-        let mut frame = Frame::new(FrameType::Hello, 0, encrypted);
-        frame.set_flag(FrameFlags::ZERO_RTT);
-
-        self.send_frame(frame).await
-    }
-
-    #[allow(dead_code)]
-    pub async fn complete_zero_rtt_handshake(
-        &mut self,
-        session_id: String,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        self.session_id = Some(session_id);
-
-        let frame = Frame::new(FrameType::HelloDone, 0, vec![]);
-        self.send_frame(frame).await
-    }
-
-    #[allow(unused_variables)]
-    #[allow(dead_code)]
-    pub async fn enable_tls13(&self) {
-        tracing::info!("TLS 1.3 with post-quantum support enabled");
-    }
-
-    #[allow(unused_variables)]
-    #[allow(dead_code)]
-    pub async fn enable_cert_pinning(&self, _cert_hash: &[u8]) {
+    pub fn enable_cert_pinning(&self, cert_hash: &[u8]) {
         tracing::info!("Certificate pinning enabled");
-    }
-
-    #[allow(dead_code)]
-    pub async fn get_cipher_suite(&self) -> String {
-        self.crypto.get_cipher_suite().to_string()
+        let _ = cert_hash;
     }
 }
 

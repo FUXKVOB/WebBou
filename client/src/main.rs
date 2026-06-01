@@ -1,6 +1,7 @@
 mod webbou;
 
-use tracing::{info, Level};
+use std::env;
+use tracing::{info, warn, Level};
 use tracing_subscriber;
 use webbou::WebBouClient;
 
@@ -8,7 +9,14 @@ use webbou::WebBouClient;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt().with_max_level(Level::INFO).init();
 
-    let client = WebBouClient::new("localhost:8443".to_string());
+    let insecure_tls = env::var("WEBBOU_INSECURE_TLS")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+    let mut client = WebBouClient::new("localhost:8443".to_string());
+    if insecure_tls {
+        warn!("WEBBOU_INSECURE_TLS=1 set: TLS certificate validation is DISABLED");
+        client = client.with_insecure_tls(true);
+    }
 
     info!("Connecting to WebBou server...");
     client.connect().await?;

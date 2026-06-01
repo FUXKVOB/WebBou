@@ -2,7 +2,9 @@ package webbou
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -13,8 +15,12 @@ import (
 	"github.com/quic-go/quic-go"
 )
 
+const readIdleTimeout = 60 * time.Second
+
+var ErrServerShuttingDown = errors.New("server is shutting down")
+
 type Server struct {
-	quicListener   net.Listener
+	quicListener   *quic.Listener
 	tcpListener    net.Listener
 	sessions       sync.Map
 	config         *ServerConfig
@@ -25,12 +31,14 @@ type Server struct {
 	bufferPool     *BufferPool
 	framePool      *FramePool
 
-	batchSender   *BatchSender
 	backPressure  *BackPressureMonitor
 	ddosProtector *DDOSProtector
 	ipReputation  *IPReputationManager
 
 	statsMutex atomic.Value
+
+	shutdownCh chan struct{}
+	wg         sync.WaitGroup
 }
 
 type Session struct {
@@ -67,10 +75,10 @@ func NewServer(config *ServerConfig) (*Server, error) {
 		sessionManager: NewSessionManager(30 * time.Minute),
 		bufferPool:     NewBufferPool(8192),
 		framePool:      NewFramePool(),
-		batchSender:    NewBatchSender(100),
 		backPressure:   NewBackPressureMonitor(0.8, 0.95),
 		ddosProtector:  NewDDOSProtector(100, 1000, 60),
 		ipReputation:   NewIPReputationManager(),
+		shutdownCh:     make(chan struct{}),
 	}, nil
 }
 
@@ -78,14 +86,17 @@ func (s *Server) Start() error {
 	if s.config == nil {
 		return fmt.Errorf("server config is nil")
 	}
+	if s.config.QUICAddr == "" && s.config.TCPAddr == "" {
+		return fmt.Errorf("no listeners configured")
+	}
+
 	if s.config.QUICAddr != "" {
+		s.wg.Add(1)
 		go s.startQUIC()
 	}
 	if s.config.TCPAddr != "" {
+		s.wg.Add(1)
 		go s.startTCP()
-	}
-	if s.config.QUICAddr == "" && s.config.TCPAddr == "" {
-		return fmt.Errorf("no listeners configured")
 	}
 
 	log.Println("WebBou server started")
@@ -99,7 +110,39 @@ func (s *Server) Start() error {
 	return nil
 }
 
+func (s *Server) Shutdown(ctx context.Context) error {
+	select {
+	case <-s.shutdownCh:
+		return nil
+	default:
+		close(s.shutdownCh)
+	}
+
+	if s.tcpListener != nil {
+		_ = s.tcpListener.Close()
+	}
+	if s.quicListener != nil {
+		_ = s.quicListener.Close()
+	}
+
+	done := make(chan struct{})
+	go func() {
+		s.wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		log.Println("WebBou server stopped cleanly")
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 func (s *Server) startQUIC() {
+	defer s.wg.Done()
+
 	quicConfig := &quic.Config{
 		MaxIdleTimeout:  30 * time.Second,
 		KeepAlivePeriod: 10 * time.Second,
@@ -112,37 +155,55 @@ func (s *Server) startQUIC() {
 		log.Printf("QUIC listener failed: %v", err)
 		return
 	}
+	s.quicListener = listener
 
 	log.Println("QUIC listener ready (quic-go v0.59.0)")
 
 	for {
 		conn, err := listener.Accept(context.Background())
 		if err != nil {
+			if errors.Is(err, net.ErrClosed) {
+				return
+			}
 			log.Printf("QUIC accept error: %v", err)
 			continue
 		}
 
-		go s.handleQUICConnection(conn)
+		s.wg.Add(1)
+		go func(c *quic.Conn) {
+			defer s.wg.Done()
+			s.handleQUICConnection(c)
+		}(conn)
 	}
 }
 
 func (s *Server) startTCP() {
+	defer s.wg.Done()
+
 	listener, err := tls.Listen("tcp", s.config.TCPAddr, s.config.TLSConfig.(*tls.Config))
 	if err != nil {
 		log.Printf("TCP listener failed: %v", err)
 		return
 	}
+	s.tcpListener = listener
 
 	log.Println("TCP listener ready")
 
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
+			if errors.Is(err, net.ErrClosed) {
+				return
+			}
 			log.Printf("TCP accept error: %v", err)
 			continue
 		}
 
-		go s.handleTCPConnection(conn)
+		s.wg.Add(1)
+		go func(c net.Conn) {
+			defer s.wg.Done()
+			s.handleTCPConnection(c)
+		}(conn)
 	}
 }
 
@@ -191,7 +252,11 @@ func (s *Server) handleTCPConnection(conn net.Conn) {
 
 	log.Printf("TCP connection from %s", remoteIP)
 
-	reader := NewFrameReader()
+	if deadline, ok := conn.(interface{ SetReadDeadline(time.Time) error }); ok {
+		_ = deadline.SetReadDeadline(time.Now().Add(readIdleTimeout))
+	}
+
+	reader := NewFrameReader(s.config.MaxFrameSize)
 	buf := s.bufferPool.Get()
 	defer s.bufferPool.Put(buf)
 
@@ -227,7 +292,7 @@ func (s *Server) handleTCPConnection(conn net.Conn) {
 func (s *Server) handleStream(session *Session, stream *quic.Stream) {
 	defer stream.Close()
 
-	reader := NewFrameReader()
+	reader := NewFrameReader(s.config.MaxFrameSize)
 	buf := make([]byte, 4096)
 
 	for {
@@ -336,9 +401,13 @@ func (s *Server) sendFrame(session *Session, frame *Frame, writer interface{}) {
 
 	switch w := writer.(type) {
 	case net.Conn:
-		w.Write(data)
+		if _, err := w.Write(data); err != nil {
+			log.Printf("write to %s failed: %v", session.ID, err)
+		}
 	case *quic.Stream:
-		w.Write(data)
+		if _, err := w.Write(data); err != nil {
+			log.Printf("write to stream %s failed: %v", session.ID, err)
+		}
 	}
 }
 
@@ -374,8 +443,11 @@ func generateSessionID() string {
 func randomString(n int) string {
 	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
 	b := make([]byte, n)
+	if _, err := rand.Read(b); err != nil {
+		return time.Now().Format("150405.000000000")
+	}
 	for i := range b {
-		b[i] = letters[time.Now().UnixNano()%int64(len(letters))]
+		b[i] = letters[int(b[i])%len(letters)]
 	}
 	return string(b)
 }

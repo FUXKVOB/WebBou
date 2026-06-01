@@ -152,13 +152,18 @@ func UnmarshalFrame(data []byte) (*Frame, error) {
 }
 
 type FrameReader struct {
-	buffer []byte
-	offset int
+	buffer    []byte
+	maxLength uint32
 }
 
-func NewFrameReader() *FrameReader {
+func NewFrameReader(maxFrameSize int) *FrameReader {
+	max := uint32(maxFrameSize)
+	if max == 0 {
+		max = 65536
+	}
 	return &FrameReader{
-		buffer: make([]byte, 0, 65536),
+		buffer:    make([]byte, 0, 65536),
+		maxLength: max,
 	}
 }
 
@@ -172,6 +177,10 @@ func (fr *FrameReader) ReadFrame() (*Frame, error) {
 	}
 
 	length := binary.BigEndian.Uint32(fr.buffer[8:12])
+	if fr.maxLength > 0 && length > fr.maxLength {
+		return nil, errors.New("frame too large")
+	}
+
 	totalSize := HeaderSize + int(length)
 
 	if len(fr.buffer) < totalSize {
