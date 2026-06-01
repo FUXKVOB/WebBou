@@ -1,0 +1,30 @@
+use std::io::{Read, Write};
+use zstd::{Decoder, Encoder};
+
+pub struct Compressor {
+    level: i32,
+}
+
+impl Compressor {
+    pub fn new(level: i32) -> Self {
+        Self { level }
+    }
+
+    pub fn compress(&self, data: &[u8]) -> Result<Vec<u8>, std::io::Error> {
+        let mut encoder = Encoder::new(Vec::new(), self.level)?;
+        encoder.write_all(data)?;
+        encoder.finish()
+    }
+
+    pub fn decompress(&self, data: &[u8]) -> Result<Vec<u8>, std::io::Error> {
+        let mut decoder = Decoder::new(data)?;
+        let mut decompressed = Vec::new();
+        decoder.read_to_end(&mut decompressed)?;
+        Ok(decompressed)
+    }
+
+    pub fn should_compress(&self, data: &[u8]) -> bool {
+        // Only compress if data is larger than 1KB
+        data.len() > 1024
+    }
+}

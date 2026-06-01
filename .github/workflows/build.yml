@@ -1,0 +1,37 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Go build
+        working-directory: ./server
+        run: go build ./...
+
+      - name: Go test
+        working-directory: ./server
+        run: go test ./...
+
+      - name: Cargo build
+        working-directory: ./client
+        run: cargo build
+
+      - name: Cargo test
+        working-directory: ./client
+        run: cargo test

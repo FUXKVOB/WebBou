@@ -1,0 +1,186 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      version: ${{ steps.get_version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Get version
+        id: get_version
+        run: echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+      
+      - name: Generate changelog
+        id: changelog
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/}"
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          
+          echo "## 🚀 Release $VERSION" > CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "### 📦 Бинарники" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "Скачайте для вашей платформы:" >> CHANGELOG.md
+          echo "- **Linux**: \`webbou-linux-amd64.tar.gz\`" >> CHANGELOG.md
+          echo "- **Windows**: \`webbou-windows-amd64.zip\`" >> CHANGELOG.md
+          echo "- **macOS**: \`webbou-darwin-amd64.tar.gz\`" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "### 📝 Изменения" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          
+          if [ -n "$PREV_TAG" ]; then
+            git log $PREV_TAG..HEAD --pretty=format:"- %s (%h)" >> CHANGELOG.md
+          else
+            git log --pretty=format:"- %s (%h)" >> CHANGELOG.md
+          fi
+          
+          echo "" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "### 🛠️ Установка" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "\`\`\`bash" >> CHANGELOG.md
+          echo "# Linux/macOS" >> CHANGELOG.md
+          echo "tar -xzf webbou-linux-amd64.tar.gz" >> CHANGELOG.md
+          echo "./server &" >> CHANGELOG.md
+          echo "./client" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "# Windows" >> CHANGELOG.md
+          echo "# Распаковать webbou-windows-amd64.zip" >> CHANGELOG.md
+          echo "# Запустить server.exe и client.exe" >> CHANGELOG.md
+          echo "\`\`\`" >> CHANGELOG.md
+          
+          cat CHANGELOG.md
+      
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.get_version.outputs.version }}
+          name: Release ${{ steps.get_version.outputs.version }}
+          body_path: CHANGELOG.md
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-release:
+    name: Build ${{ matrix.target }}
+    needs: create-release
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-amd64
+            server_name: server
+            client_name: client
+            archive_cmd: tar -czf
+            archive_ext: tar.gz
+          - os: windows-latest
+            target: windows-amd64
+            server_name: server.exe
+            client_name: client.exe
+            archive_cmd: 7z a
+            archive_ext: zip
+          - os: macos-latest
+            target: darwin-amd64
+            server_name: server
+            client_name: client
+            archive_cmd: tar -czf
+            archive_ext: tar.gz
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+      
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      
+      - name: Build server
+        working-directory: ./server
+        run: go build -v -ldflags="-s -w" -o ../bin/${{ matrix.server_name }} main_webbou.go
+      
+      - name: Build client (Unix)
+        if: matrix.os != 'windows-latest'
+        working-directory: ./client
+        run: |
+          cargo build --release
+          mkdir -p ../bin || true
+          if [ -f target/release/webbou-client ]; then
+            cp target/release/webbou-client ../bin/${{ matrix.client_name }}
+          else
+            echo "Error: webbou-client binary not found"
+            ls -la target/release/
+            exit 1
+          fi
+      
+      - name: Build client (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        working-directory: ./client
+        run: |
+          cargo build --release
+          if (-not (Test-Path ../bin)) { New-Item -ItemType Directory -Path ../bin }
+          Copy-Item target/release/webbou-client.exe ../bin/${{ matrix.client_name }}
+      
+      - name: Create README
+        shell: bash
+        run: |
+          cat > bin/README.txt << 'EOF'
+          WebBou Protocol - ${{ needs.create-release.outputs.version }}
+          
+          Быстрый старт:
+          
+          1. Создать сертификаты:
+             powershell -ExecutionPolicy Bypass -File scripts\generate-dev-cert.ps1
+          
+          2. Запустить сервер:
+             ./${{ matrix.server_name }}
+          
+          3. Запустить клиент (в новом терминале):
+             ./${{ matrix.client_name }}
+          
+          Документация: https://github.com/FUXKVOB/WebBou
+          EOF
+      
+      - name: Create archive (Unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          cd bin
+          tar -czf webbou-${{ matrix.target }}.${{ matrix.archive_ext }} ${{ matrix.server_name }} ${{ matrix.client_name }} README.txt
+          mv webbou-${{ matrix.target }}.${{ matrix.archive_ext }} ..
+      
+      - name: Create archive (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          cd bin
+          7z a webbou-${{ matrix.target }}.${{ matrix.archive_ext }} ${{ matrix.server_name }} ${{ matrix.client_name }} README.txt
+          Move-Item webbou-${{ matrix.target }}.${{ matrix.archive_ext }} ..
+      
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ needs.create-release.outputs.version }}
+          files: webbou-${{ matrix.target }}.${{ matrix.archive_ext }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
